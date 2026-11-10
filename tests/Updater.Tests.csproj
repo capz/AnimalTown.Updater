@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
-  <ItemGroup><PackageReference Include="DolphinDotNet.Core" Version="[0.1.0-updater.4]" /><Compile Include="../src/ReleaseInfo.cs" Link="ReleaseInfo.cs" /><Compile Include="../src/Sha256.cs" Link="Sha256.cs" /><Compile Include="../src/ImageFiles.cs" Link="ImageFiles.cs" /></ItemGroup>
+  <ItemGroup><Compile Remove="UiPreview/**/*.cs" /></ItemGroup>
+  <ItemGroup><PackageReference Include="DolphinDotNet.Core" Version="[0.1.0-updater.4]" /><Compile Include="../src/ConsoleText.cs" Link="ConsoleText.cs" /><Compile Include="../src/ReleaseInfo.cs" Link="ReleaseInfo.cs" /><Compile Include="../src/Sha256.cs" Link="Sha256.cs" /><Compile Include="../src/ImageFiles.cs" Link="ImageFiles.cs" /></ItemGroup>
 </Project>

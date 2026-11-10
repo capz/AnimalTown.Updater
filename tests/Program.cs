@@ -10,6 +10,11 @@ foreach(int size in new[]{0,1,3,55,56,63,64,65,127,128,1000,1000000}){
     for(int at=0;at<size;at+=17)sha.Append(data,at,Math.Min(17,size-at));
     Check(sha.Finish()==Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant(),"SHA-256 boundary / multiblock "+size);
 }
+Check(Enumerable.Range(0,7).Select(ConsoleText.Dots).SequenceEqual(new[]{0,1,3,7,6,4,0}),"dots appear and disappear left to right");
+Check(ConsoleText.Transfer(1572864,10485760)=="1.5 MiB / 10.0 MiB","binary MiB progress units");
+Check(ConsoleText.Percent(999,1000)==99&&ConsoleText.Percent(1200,1000)==100&&ConsoleText.Percent(-1,1000)==0,"bounded exact download percentage");
+var wrapped=new string[3];int rows=ConsoleText.Wrap("A verylongfilename.iso and another line",10,s=>s.Length,wrapped);
+Check(rows==3&&wrapped.All(s=>s.Length<=10)&&wrapped[2].EndsWith("..."),"safe-area wrapping bounds long filenames and truncated errors");
 string json="""
 [{"tag_name":"v0.14.9.abcdef123456","draft":false,"prerelease":true,"ignored":{"nested":[1,true,null]},"assets":[{"name":"AnimalTown-0.14.9.abcdef123456.iso","size":1459978240},{"name":"AnimalTown-0.14.9.abcdef123456.nkit.iso","size":93001728,"browser_download_url":"https://github.com/capz/AnimalTown/releases/download/v0.14.9.abcdef123456/AnimalTown-0.14.9.abcdef123456.nkit.iso","digest":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}]}]
 """;
