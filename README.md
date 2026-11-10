@@ -13,7 +13,7 @@ branch releases, publication order decides. The final component is an opaque
 commit identity. Equal versions do not download again.
 
 The ISO streams into checked contiguous storage with a fixed 16 KiB application
-buffer. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
+buffer. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
 must match before replacement. The published download keeps GitHub's filename.
 Installation renames `AnimalTown.iso` to `AnimalTown.iso.bak`, then the completed
 release file to `AnimalTown.iso`. A previous backup is retired only while the
@@ -69,8 +69,8 @@ libogc2/devkitPPC toolchain used by DolphinDotNet. Then:
 python3 tools/build.py --backend Docker
 ```
 
-The build pins [DolphinDotNet PR #163](https://github.com/capz/DolphinDotNet/pull/163)
-by commit in `sdk.lock.json`, creates a local NuGet feed, runs the host tests and
+The build pins the SDK changes from [PR #163](https://github.com/capz/DolphinDotNet/pull/163)
+and [PR #164](https://github.com/capz/DolphinDotNet/pull/164) by commit in `sdk.lock.json`, creates a local NuGet feed, runs the host tests and
 uses the SDK's native build pipeline. This avoids waiting for a published SDK
 package. An existing clean SDK checkout at that exact revision can be supplied
 with `--sdk-source /path/to/DolphinDotNet`. Outputs and checksums are under
