@@ -103,7 +103,8 @@ before retrying. The updater does not touch memory-card town or dev-config saves
 
 The updater console uses the native IPL font, a light gray canvas and dark gray
 text, a vertically centered status block and a 48-pixel safe area on every side.
-Transfer progress displays both percent and binary MiB received/total. Loading
+Both native SD readback and SHA-256 verification yield to the UI and honor
+cancellation before publication. Transfer progress displays both percent and binary MiB received/total. Loading
 dots fill from left to right, then clear in the same order on a repeating cycle.
 `tests/UiPreview` renders the actual console with deterministic sample states for
 Dolphin visual inspection, without requiring a writable GC Loader or network.

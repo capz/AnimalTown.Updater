@@ -69,7 +69,7 @@ internal static class Updater
         if(total!=release.Size||hash.Finish()!=release.Digest)throw new IOException("Incomplete or damaged release; original ISO preserved");
         // Complete verifies the actual card bytes and contiguous cluster chain,
         // then publishes the unmodified GitHub filename.
-        Phase=4;Status="Verifying SD card write";await Task.Delay(30,token);output.Complete();
+        Phase=4;Status="Verifying SD card write";await output.CompleteAsync(token);
     }
     private static void ConfigureTls()
     {

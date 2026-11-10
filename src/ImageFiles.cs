@@ -21,7 +21,7 @@ internal static class ImageFiles
         while(true){
             token.ThrowIfCancellationRequested();int n=input.Read(bytes,0,bytes.Length);if(n==0)break;hash.Append(bytes,0,n);
             // Return to the console pump during long SD verification passes.
-            if((slice+=n)>=65536){slice=0;await Task.Delay(1,token);}
+            if((slice+=n)>=65536){slice=0;await Task.Yield();}
         }
         return hash.Finish();
     }
