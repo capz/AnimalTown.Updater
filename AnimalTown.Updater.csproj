@@ -1,10 +1,10 @@
-<Project Sdk="DolphinDotNet.Sdk/0.1.0-updater.3">
+<Project Sdk="DolphinDotNet.Sdk/0.1.0-updater.4">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>animal-town-updater</AssemblyName>
     <DndManagedHeapBytes>1048576</DndManagedHeapBytes>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
-  <ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="[0.1.0-updater.3]" /></ItemGroup>
+  <ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="[0.1.0-updater.4]" /></ItemGroup>
   <ItemGroup><Compile Include="src/**/*.cs" /></ItemGroup>
 </Project>

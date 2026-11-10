@@ -1,0 +1,4 @@
+<Project>
+  <!-- The updater is also built below AnimalTown/out; parent application
+       settings must not change its SDK imports or generate untracked locks. -->
+</Project>
