@@ -43,7 +43,12 @@ internal sealed class ReleaseInfo
     internal static bool IsNewer(string local,string remote)
     {
         int[] a=ParseVersion(local),b=ParseVersion(remote);
-        for(int i=0;i<3;i++){if(b[i]>a[i])return true;if(b[i]<a[i])return false;}
+        if(b[0]!=a[0])return b[0]>a[0];
+        // Feature and bugfix counters are independent. Branch releases may
+        // advance one while the other is lower: use publication order for
+        // these incomparable pairs, and reject only strictly older counters.
+        bool higher=b[1]>a[1]||b[2]>a[2],lower=b[1]<a[1]||b[2]<a[2];
+        if(higher)return true;if(lower)return false;
         // bb is a commit identity, not an ordered build counter. GitHub's most
         // recently published release resolves equal-counter commit identities.
         return local!=remote;

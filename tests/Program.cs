@@ -17,6 +17,7 @@ var release=ReleaseInfo.Parse(json);Check(release.Size==93001728&&release.Versio
 Check(ReleaseInfo.IsNewer("0.13.9.111111111111",release.Version),"new feature counter");
 Check(!ReleaseInfo.IsNewer(release.Version,release.Version),"same release skipped");
 Check(!ReleaseInfo.IsNewer("0.15.9.111111111111",release.Version),"downgrade skipped");
+Check(ReleaseInfo.IsNewer("0.15.8.111111111111",release.Version),"independent feature/fix counters follow newest publication when incomparable");
 Check(ReleaseInfo.IsNewer("0.14.9.111111111111",release.Version),"opaque commit identity uses newest publication");
 Reject(()=>ReleaseInfo.Parse(json.Replace("\"draft\":false","\"draft\":true")),"draft rejected");
 Reject(()=>ReleaseInfo.Parse(json.Replace("sha256:","sha512:")),"missing SHA-256 rejected");
