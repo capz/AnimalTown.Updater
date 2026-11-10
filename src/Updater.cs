@@ -37,7 +37,7 @@ internal static class Updater
                 Phase=2;Status="Checking GitHub releases";
                 using(var metadata=await http.GetAsync("https://api.github.com/repos/capz/AnimalTown/releases?per_page=1",HttpCompletionOption.ResponseContentRead,token)){
                     metadata.EnsureSuccessStatusCode();var release=ReleaseInfo.Parse(await metadata.Content.ReadAsStringAsync());
-                    if(ReleaseInfo.IsNewer(local,release.Version)){
+                    if(ReleaseInfo.NeedsUpdate(local,release.Version)){
                         Artifact=release.Name;TotalBytes=release.Size;
                         string download=Root+release.Name;
                         if(!File.Exists(download))await Download(http,release,download,token);

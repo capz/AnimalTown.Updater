@@ -19,11 +19,11 @@ string json="""
 [{"tag_name":"v0.14.9.abcdef123456","draft":false,"prerelease":true,"ignored":{"nested":[1,true,null]},"assets":[{"name":"AnimalTown-0.14.9.abcdef123456.iso","size":1459978240},{"name":"AnimalTown-0.14.9.abcdef123456.nkit.iso","size":93001728,"browser_download_url":"https://github.com/capz/AnimalTown/releases/download/v0.14.9.abcdef123456/AnimalTown-0.14.9.abcdef123456.nkit.iso","digest":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}]}]
 """;
 var release=ReleaseInfo.Parse(json);Check(release.Size==93001728&&release.Version=="0.14.9.abcdef123456","select direct NKit development release");
-Check(ReleaseInfo.IsNewer("0.13.9.111111111111",release.Version),"new feature counter");
-Check(!ReleaseInfo.IsNewer(release.Version,release.Version),"same release skipped");
-Check(!ReleaseInfo.IsNewer("0.15.9.111111111111",release.Version),"downgrade skipped");
-Check(ReleaseInfo.IsNewer("0.15.8.111111111111",release.Version),"independent feature/fix counters follow newest publication when incomparable");
-Check(ReleaseInfo.IsNewer("0.14.9.111111111111",release.Version),"opaque commit identity uses newest publication");
+Check(ReleaseInfo.NeedsUpdate("0.13.9.111111111111",release.Version),"new feature counter");
+Check(!ReleaseInfo.NeedsUpdate(release.Version,release.Version),"same release skipped");
+Check(ReleaseInfo.NeedsUpdate("0.15.9.111111111111",release.Version),"newest publication wins when squash merging lowers first-parent counters");
+Check(ReleaseInfo.NeedsUpdate("0.15.8.111111111111",release.Version),"independent feature/fix counters follow newest publication when incomparable");
+Check(ReleaseInfo.NeedsUpdate("0.14.9.111111111111",release.Version),"opaque commit identity uses newest publication");
 Reject(()=>ReleaseInfo.Parse(json.Replace("\"draft\":false","\"draft\":true")),"draft rejected");
 Reject(()=>ReleaseInfo.Parse(json.Replace("sha256:","sha512:")),"missing SHA-256 rejected");
 Reject(()=>ReleaseInfo.Parse(json.Replace("https://github.com/capz/AnimalTown/","http://example.com/")),"foreign / plaintext asset rejected");

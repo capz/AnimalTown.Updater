@@ -40,18 +40,13 @@ internal sealed class ReleaseInfo
         for(int i=7;i<result.Digest.Length;i++)if(Hex(result.Digest[i])<0)throw new IOException("Invalid release SHA-256");
         result.Digest=result.Digest.Substring(7).ToLowerInvariant();result.Version=version;return result;
     }
-    internal static bool IsNewer(string local,string remote)
+    internal static bool NeedsUpdate(string local,string latest)
     {
-        int[] a=ParseVersion(local),b=ParseVersion(remote);
-        if(b[0]!=a[0])return b[0]>a[0];
-        // Feature and bugfix counters are independent. Branch releases may
-        // advance one while the other is lower: use publication order for
-        // these incomparable pairs, and reject only strictly older counters.
-        bool higher=b[1]>a[1]||b[2]>a[2],lower=b[1]<a[1]||b[2]<a[2];
-        if(higher)return true;if(lower)return false;
-        // bb is a commit identity, not an ordered build counter. GitHub's most
-        // recently published release resolves equal-counter commit identities.
-        return local!=remote;
+        ParseVersion(local);ParseVersion(latest);
+        // GitHub's newest release is authoritative. First-parent counters can
+        // decrease when a branch release is later squash-merged into main;
+        // neither those counters nor the commit hash form a total ordering.
+        return local!=latest;
     }
     internal static int[] ParseVersion(string text)
     {

@@ -7,10 +7,10 @@ returns from Main; the updater hands off to Swiss after completing its work.
 It reads the installed version from `gcloader:/AnimalTown.iso`, checks the newest
 published [AnimalTown release](https://github.com/capz/AnimalTown/releases),
 including prereleases, and selects the direct `AnimalTown-<version>.nkit.iso`
-asset. The major counter and strictly older feature/fix counters prevent downgrades.
-Feature/fix counters are independent: when one rises and the other falls across
-branch releases, publication order decides. The final component is an opaque
-commit identity. Equal versions do not download again.
+asset. The newest GitHub release is authoritative: different installed/release identities
+trigger an update, and equal identities skip downloading. Numeric counters can
+decrease after a feature branch is squash-merged, and the final component is an
+opaque commit hash, so neither is used as a total ordering.
 
 The ISO streams into checked contiguous storage with a fixed 16 KiB application
 buffer. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
