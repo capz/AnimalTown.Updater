@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 namespace AnimalTown.Updater;
 
 internal static class ImageFiles
@@ -13,9 +15,15 @@ internal static class ImageFiles
         const string prefix="AnimalTown / ";if(!title.StartsWith(prefix))throw new IOException("Image has no release identity");
         string version=title.Substring(prefix.Length);ReleaseInfo.ParseVersion(version);return version;
     }
-    internal static string Hash(string path)
+    internal static async Task<string> HashAsync(string path,CancellationToken token)
     {
-        using var input=File.OpenRead(path);var bytes=new byte[16384];var hash=new Sha256();while(true){int n=input.Read(bytes,0,bytes.Length);if(n==0)break;hash.Append(bytes,0,n);}return hash.Finish();
+        using var input=File.OpenRead(path);var bytes=new byte[16384];var hash=new Sha256();int slice=0;
+        while(true){
+            token.ThrowIfCancellationRequested();int n=input.Read(bytes,0,bytes.Length);if(n==0)break;hash.Append(bytes,0,n);
+            // Return to the console pump during long SD verification passes.
+            if((slice+=n)>=65536){slice=0;await Task.Delay(1,token);}
+        }
+        return hash.Finish();
     }
 }
 

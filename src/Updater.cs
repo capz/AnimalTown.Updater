@@ -42,7 +42,7 @@ internal static class Updater
                         string download=Root+release.Name;
                         if(!File.Exists(download))await Download(http,release,download,token);
                         Phase=4;Status="Verifying release image";
-                        if(ImageFiles.Hash(download)!=release.Digest||ImageFiles.ReadVersion(download)!=release.Version)throw new IOException("Release verification failed; original ISO preserved");
+                        if(await ImageFiles.HashAsync(download,token)!=release.Digest||ImageFiles.ReadVersion(download)!=release.Version)throw new IOException("Release verification failed; original ISO preserved");
                         DownloadedBytes=TotalBytes;
                         token.ThrowIfCancellationRequested();Phase=5;Status="Installing "+release.Version;
                         InstallTransaction.Commit(files,Image,download);

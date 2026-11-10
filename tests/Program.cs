@@ -49,6 +49,11 @@ string temporary=Path.Combine(Path.GetTempPath(),"animaltown-updater-"+Guid.NewG
 try{
     string path=Path.Combine(temporary,image);var header=new byte[0x440];Encoding.ASCII.GetBytes("AMTE01").CopyTo(header,0);new byte[]{0xc2,0x33,0x9f,0x3d}.CopyTo(header,0x1c);Encoding.ASCII.GetBytes("AnimalTown / "+release.Version).CopyTo(header,0x20);File.WriteAllBytes(path,header);
     Check(ImageFiles.ReadVersion(path)==release.Version,"standalone updater reads installed version from ISO header");
+    var content=new byte[196777];for(int i=0;i<content.Length;i++)content[i]=(byte)(i%251);File.WriteAllBytes(path,content);
+    Check(await ImageFiles.HashAsync(path,default)==Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(),"yielding SD verification hashes multiple slices");
+    using var cancelled=new CancellationTokenSource();cancelled.Cancel();bool interrupted=false;
+    try{await ImageFiles.HashAsync(path,cancelled.Token);}catch(OperationCanceledException){interrupted=true;}
+    Check(interrupted,"SD verification observes cancellation");
     header[0]=0;File.WriteAllBytes(path,header);Reject(()=>ImageFiles.ReadVersion(path),"foreign image preserved");
 }finally{Directory.Delete(temporary,true);}
 if(args.Length==1){var live=ReleaseInfo.Parse(File.ReadAllText(args[0]));Check(live.Name.EndsWith(".nkit.iso"),"actual GitHub release metadata");Console.WriteLine("Live release parsed: "+live.Name);}
