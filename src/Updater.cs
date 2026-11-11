@@ -21,6 +21,12 @@ internal static class Updater
     internal static string Artifact="";
     internal static async Task<PreparedDol> Run(CancellationToken token)
     {
+        // DolLauncher has copied the complete executable to MEM1 and closed
+        // its source. The console uses IPL resources, so nothing below needs
+        // dvd:/, even when this DOL was embedded in the ISO being replaced.
+        // Release an ISO-backed mount before recovery can rename its source.
+        Storage.Unmount(StorageDevice.DvdDrive);
+        if(Storage.IsMounted(StorageDevice.DvdDrive))throw new IOException("Could not release the updater's source disc");
         Status="Mounting GC Loader SD card";
         if(!Storage.Mount(StorageDevice.GcLoader))throw new IOException("GC Loader SD is unavailable or not writable");
         var files=new InstallFiles();InstallTransaction.Recover(files,Image);
