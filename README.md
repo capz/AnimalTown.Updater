@@ -4,6 +4,14 @@ Standalone GameCube updater written in C# with DolphinDotNet. The output is
 `animal-town-updater.dol`. AnimalTown's title menu launches this executable and
 returns from Main; the updater hands off to Swiss after completing its work.
 
+The complete updater executable is copied into MEM1 before launch; its console
+uses the IPL font and has no disc assets. It explicitly unmounts `dvd:/` before
+mounting the writable GC Loader card or recovering an interrupted installation,
+and refuses to continue if the disc remains mounted. The source ISO can then be
+renamed or deleted without further executable or asset reads from it. Swiss is
+also staged in native memory before installation changes any image files. The
+ISO download still streams to SD; it is never buffered in RAM in full.
+
 It reads the installed version from `gcloader:/AnimalTown.iso`, checks the newest
 published [AnimalTown release](https://github.com/capz/AnimalTown/releases),
 including prereleases, and selects the direct `AnimalTown-<version>.nkit.iso`
