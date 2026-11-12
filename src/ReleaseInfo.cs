@@ -36,7 +36,7 @@ internal sealed class ReleaseInfo
         for(int i=0;i<assets.Count;i++)if(assets[i].Name=="AnimalTown-"+version+".nkit.iso"){
             if(result!=null)throw new IOException("Duplicate NKit asset");result=assets[i];
         }
-        if(result==null||result.Size<0x500||!result.Url.StartsWith("https://github.com/capz/AnimalTown/releases/download/"+tag+"/")||!result.Digest.StartsWith("sha256:")||result.Digest.Length!=71)throw new IOException("Release lacks a verified NKit ISO");
+        if(result==null||result.Size<0x500||!AssetUrl(result.Url,tag,result.Name)||!result.Digest.StartsWith("sha256:")||result.Digest.Length!=71)throw new IOException("Release lacks a verified NKit ISO");
         for(int i=7;i<result.Digest.Length;i++)if(Hex(result.Digest[i])<0)throw new IOException("Invalid release SHA-256");
         result.Digest=result.Digest.Substring(7).ToLowerInvariant();result.Version=version;return result;
     }
@@ -50,14 +50,31 @@ internal sealed class ReleaseInfo
     }
     internal static int[] ParseVersion(string text)
     {
+        if(text==null)throw new FormatException("Missing AnimalTown version");
         var values=new int[3];int at=0;
         for(int part=0;part<3;part++){
             int start=at,n=0;while(at<text.Length&&text[at]>='0'&&text[at]<='9'){int d=text[at++]-'0';if(n>(int.MaxValue-d)/10)throw new FormatException("Version counter overflow");n=n*10+d;}
-            if(at==start||at>=text.Length||text[at++]!='.')throw new FormatException("Invalid AnimalTown version");values[part]=n;
+            if(at==start)throw new FormatException("Invalid AnimalTown version");values[part]=n;
+            if(part<2&&(at>=text.Length||text[at++]!='.'))throw new FormatException("Invalid AnimalTown version");
         }
-        int remaining=text.Length-at;if(remaining!=12&&remaining!=40)throw new FormatException("Invalid build identity");for(;at<text.Length;at++)if(Hex(text[at])<0)throw new FormatException("Invalid build identity");return values;
+        if(at==text.Length)return values;
+        char separator=text[at++];int remaining=text.Length-at;
+        // Current main uses three counters; review builds add +<12hex>. Keep
+        // legacy dot-separated 12/40hex identities readable for old installs.
+        if(separator=='+'?remaining!=12:separator!='.'||remaining!=12&&remaining!=40)throw new FormatException("Invalid build identity");
+        for(;at<text.Length;at++)if(Hex(text[at])<0)throw new FormatException("Invalid build identity");return values;
     }
     internal static int Hex(char c)=>c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:c>='A'&&c<='F'?c-'A'+10:-1;
+    private static bool AssetUrl(string url,string tag,string name)
+    {
+        const string root="https://github.com/capz/AnimalTown/releases/download/";
+        string encodedTag=EncodePlus(tag),encodedName=EncodePlus(name);
+        return url==root+tag+"/"+name||url==root+encodedTag+"/"+encodedName||url==root+encodedTag+"/"+name||url==root+tag+"/"+encodedName;
+    }
+    private static string EncodePlus(string text)
+    {
+        string result="";for(int i=0;i<text.Length;i++)result+=text[i]=='+'?"%2B":text.Substring(i,1);return result;
+    }
     private static string Text(JsonReader r){if(r.TokenType!=JsonTokenType.String)throw new FormatException();return r.Value;}
     private static void Need(JsonReader r,JsonTokenType token){if(!r.Read()||r.TokenType!=token)throw new FormatException("Invalid GitHub release response");}
     private static void Skip(JsonReader r)

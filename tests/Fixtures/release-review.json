@@ -1,0 +1,15 @@
+[
+  {
+    "tag_name": "v0.11.24+1cc478a97ab0",
+    "draft": false,
+    "prerelease": true,
+    "assets": [
+      {
+        "name": "AnimalTown-0.11.24+1cc478a97ab0.nkit.iso",
+        "browser_download_url": "https://github.com/capz/AnimalTown/releases/download/v0.11.24%2B1cc478a97ab0/AnimalTown-0.11.24%2B1cc478a97ab0.nkit.iso",
+        "size": 92655616,
+        "digest": "sha256:e9e345baf3bb35cd5be3676a2572f3e010edc56d6d0dac4578448cab6f2a5e5b"
+      }
+    ]
+  }
+]
