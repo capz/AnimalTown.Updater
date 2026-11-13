@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Provision one-use HTTPS input and an explicitly selected GC Loader image."""
+"""Provision one-use HTTPS inputs and the Swiss automatic-launch helper."""
 import argparse
 import datetime
 import os
@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import ssl
 import tempfile
+import struct
 
 IMAGE_PREFIX = 'gcloader:/'
 IMAGE_RECORD = 'image-path.txt'
@@ -110,10 +111,32 @@ def _atomic_write(path, data):
             os.unlink(temporary)
 
 
+def _swiss_bytes(path):
+    if not path.is_file() or not 0x100 <= path.stat().st_size <= 8 * 1024 * 1024:
+        raise ValueError('provide a Swiss DOL of 256 bytes to 8 MiB')
+    data = path.read_bytes()
+    entry = struct.unpack_from('>I', data, 0xe0)[0]
+    executable = False
+    for section in range(18):
+        offset = struct.unpack_from('>I', data, section * 4)[0]
+        address = struct.unpack_from('>I', data, 0x48 + section * 4)[0]
+        size = struct.unpack_from('>I', data, 0x90 + section * 4)[0]
+        if not size:
+            continue
+        if offset < 0x100 or offset > len(data) or size > len(data) - offset or address < 0x80000000 or address + size > 0x81800000:
+            raise ValueError('Swiss DOL has an invalid section')
+        if section < 7 and address <= entry < address + size:
+            executable = True
+    if not executable:
+        raise ValueError('Swiss DOL has no executable entry point')
+    return data
+
+
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('sd_root',type=Path)
-    parser.add_argument('--image', type=Path, help='installed ISO/GCM PC path, relative to the SD root or absolute within it; required for first direct-boot setup')
+    parser.add_argument('--image', type=Path, help='optional legacy installation record for older AnimalTown builds; new builds discover stable ISOs automatically')
+    parser.add_argument('--swiss', type=Path, help='official Swiss DOL to install as animaltown-updater/swiss.dol; required if the helper is not already installed')
     parser.add_argument('--roots',type=Path,default=Path(ssl.get_default_verify_paths().cafile or 'roots.pem'))
     parser.add_argument('--utc-offset-minutes',type=int,default=int(datetime.datetime.now().astimezone().utcoffset().total_seconds()//60),help='UTC offset of the correctly set GameCube local clock (default: this PC)')
     args=parser.parse_args(argv)
@@ -124,20 +147,29 @@ def main(argv=None):
         folder = root / 'animaltown-updater'
         _inside(root, folder.resolve())
         record = folder / IMAGE_RECORD
-        if record.exists() or record.is_symlink():
+        if args.image is not None and (record.exists() or record.is_symlink()):
             _inside(root, record.resolve(strict=True))
         # Validate all paths and image content before changing any existing
         # record, roots, clock configuration or private one-use seed.
-        image = select_image(root, args.image) if args.image is not None else existing_image(root, record) if record.exists() else None
+        image = select_image(root, args.image) if args.image is not None else None
+        swiss = folder / 'swiss.dol'
+        if swiss.exists() or swiss.is_symlink():
+            _inside(root, swiss.resolve(strict=True))
+        # The native SDK performs full DOL staging/overlap validation before
+        # deleting an ISO. Reject broken host copies before writing launch inputs.
+        helper = _swiss_bytes(args.swiss.resolve(strict=True) if args.swiss is not None else swiss)
         seed = folder / 'entropy.bin'
         if seed.exists() or seed.is_symlink():
-            if args.image is None:
+            if args.image is None and args.swiss is None:
                 raise ValueError('an unconsumed seed already exists; it can be used for the next updater launch')
             _inside(root, seed.resolve(strict=True))
             if not seed.is_file() or not 48 <= seed.stat().st_size <= 64:
                 raise ValueError('the existing launch seed must be a regular file of 48..64 bytes')
-            _atomic_write(record, (image + '\n').encode('utf-8'))
-            print('Recorded installed image; retained unused launch inputs unchanged.')
+            if image is not None:
+                _atomic_write(record, (image + '\n').encode('utf-8'))
+            if args.swiss is not None:
+                _atomic_write(swiss, helper)
+            print('Updated launch helper or legacy image record; retained unused launch inputs unchanged.')
             return
         roots = args.roots.read_bytes()
         if not 0 < len(roots) <= 262144 or b'-----BEGIN CERTIFICATE-----' not in roots:
@@ -145,6 +177,8 @@ def main(argv=None):
         if not -840 <= args.utc_offset_minutes <= 840:
             raise ValueError('UTC offset must be within -840..840 minutes')
         folder.mkdir(parents=True, exist_ok=True)
+        if args.swiss is not None:
+            _atomic_write(swiss, helper)
         if args.image is not None:
             _atomic_write(record, (image + '\n').encode('utf-8'))
         _atomic_write(folder / 'roots.pem', roots)
@@ -157,10 +191,10 @@ def main(argv=None):
             stream.flush()
             os.fsync(stream.fileno())
     except (OSError, ValueError, UnicodeError) as error:
-        parser.error(str(error) + ('; provide --image to select the installed image' if args.image is None and 'unconsumed seed' not in str(error) else ''))
+        parser.error(str(error))
     print('Provisioned one updater launch. Keep this SD private; safely eject it.')
     if image is None:
-        print('No installed image recorded: --image is required for first direct-boot setup. AnimalTown will report the missing mapping.')
+        print('Stable AnimalTown images will be discovered automatically; no image mapping is required.')
     else:
         print('Installed image record ' + ('updated.' if args.image is not None else 'preserved.'))
 

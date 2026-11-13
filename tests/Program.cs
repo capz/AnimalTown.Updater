@@ -35,6 +35,31 @@ foreach(string version in new[]{"","0.1","0.1.2.","0.1.2+","v0.1.2.abcdef123456"
 var mainRelease=ReleaseInfo.Parse(json.Replace("0.14.9.abcdef123456","0.11.24"));
 var reviewRelease=ReleaseInfo.Parse(json.Replace("0.14.9.abcdef123456","0.11.24+abcdef123456"));
 Check(mainRelease.Name=="AnimalTown-0.11.24.nkit.iso"&&reviewRelease.Name=="AnimalTown-0.11.24+abcdef123456.nkit.iso","current numeric and review release assets are selected by their exact identities");
+string stableJson=json.Trim()[1..^1].Replace("0.14.9.abcdef123456","0.11.24").Replace("\"prerelease\":true","\"prerelease\":false");
+var stable=ReleaseInfo.ParseStable(stableJson);
+Check(stable.Version=="0.11.24"&&stable.Name=="AnimalTown-0.11.24.nkit.iso","stable endpoint keeps the published release filename");
+Check(ReleaseInfo.NeedsStableUpdate("0.11.23","0.11.24")&&!ReleaseInfo.NeedsStableUpdate("0.11.24","0.11.24")&&!ReleaseInfo.NeedsStableUpdate("1.0.0","0.99.99"),"stable updates never downgrade the highest installed numeric version");
+Reject(()=>ReleaseInfo.ParseStable(stableJson.Replace("\"draft\":false","\"draft\":true")),"stable updater rejects drafts");
+Check(ReleaseInfo.ParseStable(stableJson.Replace("\"prerelease\":false","\"prerelease\":true")).Version=="0.11.24","numeric main builds remain stable when the publisher labels them prereleases");
+Reject(()=>ReleaseInfo.ParseStable(stableJson.Replace("0.11.24","0.11.24+abcdef123456")),"stable updater rejects commit-hash builds even when prerelease is false");
+Reject(()=>ReleaseInfo.ParseStable(stableJson.Replace("sha256:","sha512:")),"stable updater requires a SHA-256 digest");
+Reject(()=>ReleaseInfo.ParseStable(stableJson.Replace("https://github.com/capz/AnimalTown/","http://example.com/")),"stable updater rejects foreign plaintext assets");
+Reject(()=>ReleaseInfo.ParseStable("[]"),"stable endpoint must return one release object");
+var pageStable=ReleaseInfo.ParseStablePage("["+stableJson.Replace("\"prerelease\":false","\"prerelease\":true")+"]",out bool exhausted);
+Check(pageStable?.Version=="0.11.24"&&!exhausted,"numeric prerelease-tagged publication is selected from a one-release page");
+string[] skippedPages={json,"["+stableJson.Replace("\"draft\":false","\"draft\":true")+"]","["+stableJson.Replace("v0.11.24","updater-preview")+"]"};
+int skipped=0;
+foreach(string page in skippedPages){
+    Check(ReleaseInfo.ParseStablePage(page,out exhausted)==null&&!exhausted,"hash, draft or unrelated publication is skipped without treating the feed as exhausted");skipped++;
+}
+Check(skipped==3&&ReleaseInfo.ParseStablePage("["+stableJson+"]",out exhausted)?.Version=="0.11.24"&&!exhausted,"a stable image remains discoverable behind several non-stable release pages");
+Check(ReleaseInfo.ParseStablePage("[]",out exhausted)==null&&exhausted,"empty release page ends stable-publication discovery");
+foreach(string invalidPage in new[]{"["+stableJson.Replace("sha256:","sha512:")+"]","["+stableJson.Replace("https://github.com/capz/AnimalTown/","http://example.com/")+"]"})
+    Reject(()=>ReleaseInfo.ParseStablePage(invalidPage,out _),"invalid selected numeric-release assets fail instead of falling back to an older publication");
+foreach(string version in new[]{"0.0.0","0.11.24","1.0.0","12.345.6789"})
+    Check(ReleaseInfo.ParseStableVersion(version).Length==3,"stable numeric version is accepted: "+version);
+foreach(string version in new[]{"","0.1","0.1.2.","0.1.2+abcdef123456","0.1.2.abcdef123456","0.1.2.0123456789abcdef0123456789abcdef01234567","v0.1.2","0.1.2-dirty","0.1.2\n","0.1.2 ","0.99999999999.0"})
+    Reject(()=>ReleaseInfo.ParseStableVersion(version),"stable numeric version excludes malformed and debug identities");
 Check(!ReleaseInfo.NeedsUpdate("0.11.24","0.11.24")&&ReleaseInfo.NeedsUpdate("0.14.9.abcdef123456","0.11.24")&&ReleaseInfo.NeedsUpdate("0.11.24+abcdef123456","0.11.24"),"newest published identity remains authoritative across current and legacy formats");
 string publishedJson=File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"Fixtures","release-review.json"));
 var published=ReleaseInfo.Parse(publishedJson);
@@ -44,6 +69,10 @@ foreach(string url in new[]{published.Url.Replace("%2B","+"),published.Url.Repla
 foreach(string url in new[]{published.Url.Replace("/AnimalTown-0.11.24%2B1cc478a97ab0.nkit.iso","/other.nkit.iso"),published.Url.Replace("/v0.11.24%2B1cc478a97ab0/","/v0.11.25/"),published.Url+"/other.iso",published.Url+"?download=1",published.Url.Replace("github.com/","github.com@evil.example/"),published.Url.Replace("%2B","%252B")})
     Reject(()=>ReleaseInfo.Parse(publishedJson.Replace(published.Url,url)),"release download URL must identify the exact repository, tag and published basename");
 string[] Request(string path,string version="0.11.24")=>new[]{"dvd:/animal-town-updater.dol",LaunchRequest.Protocol,path,version};
+var discoveryRequest=LaunchRequest.Parse(new[]{"dvd:/animal-town-updater.dol",LaunchRequest.DiscoveryProtocol,"0.11.24+abcdef123456"});
+Check(discoveryRequest.Image==""&&discoveryRequest.Version=="0.11.24+abcdef123456","discovery handoff needs only running identity, not an image mapping");
+foreach(string[] arguments in new[]{new[]{"updater.dol",LaunchRequest.DiscoveryProtocol},new[]{"updater.dol",LaunchRequest.DiscoveryProtocol,"0.11.24","extra"},new[]{"updater.dol",LaunchRequest.DiscoveryProtocol,"not-a-version"},new[]{"updater.dol","--animaltown-update=3","0.11.24"}})
+    Reject(()=>LaunchRequest.Parse(arguments),"discovery handoff rejects missing, extra and unsupported arguments");
 foreach(string path in new[]{"gcloader:/My Town.iso","gcloader:/Games/Animal Town/AnimalTown-0.11.24.nkit.iso","gcloader:/Games/Autumn.GCM","gcloader:/街/Forêt 🦊.nkit.iso"}){
     var request=LaunchRequest.Parse(Request(path));
     Check(request.Image==path&&request.Backup==path+".bak"&&request.Marker==path+".update","a launch request preserves the actual root, subdirectory, spaced or Unicode image name");
@@ -72,6 +101,25 @@ Check(success.Data[image]=="new"&&success.Data[image+".bak"]=="original"&&!succe
 var cut=new FakeFiles();cut.Data[image+".bak"]="original";cut.Mark(image+".update");cut.Data[download]="new";InstallTransaction.Recover(cut,image);
 Check(cut.Data[image]=="original"&&cut.Data[download]=="new","power cut between renames restores original and retains download");
 var unknown=new FakeFiles();unknown.Data[image+".update"]="unknown";Reject(()=>InstallTransaction.Recover(unknown,image),"unknown marker preserved");
+var publishedFiles=new FakeFiles();publishedFiles.Data[image]="original";publishedFiles.Data[mainRelease.Name]="verified release";publishedFiles.Data["other.iso"]="unrelated";
+InstallTransaction.DeleteSelected(publishedFiles,image,mainRelease.Name);
+Check(!publishedFiles.Exists(image)&&publishedFiles.Data[mainRelease.Name]=="verified release"&&publishedFiles.Data["other.iso"]=="unrelated","successful cleanup deletes only the selected old ISO and preserves the published filename");
+Check(!publishedFiles.Exists(image+".bak")&&!publishedFiles.Exists(image+".update"),"filename-preserving cleanup performs no original-name replacement or backup rename");
+foreach(bool after in new[]{false,true}){
+    var failure=new FakeFiles{FailAt=1,FailAfter=after};failure.Data[image]="original";failure.Data[mainRelease.Name]="verified release";
+    Reject(()=>InstallTransaction.DeleteSelected(failure,image,mainRelease.Name),"old-file deletion failures propagate");
+    Check(failure.Data[mainRelease.Name]=="verified release","deletion failure or interruption always retains the verified published ISO");
+}
+foreach(string missing in new[]{image,mainRelease.Name}){
+    var failure=new FakeFiles();failure.Data[image]="original";failure.Data[mainRelease.Name]="verified release";failure.Data.Remove(missing);
+    Reject(()=>InstallTransaction.DeleteSelected(failure,image,mainRelease.Name),"cleanup requires both the selected and published images to exist");
+    Check(failure.Data.Count==1,"failed cleanup does not mutate an incomplete installation");
+}
+var sameImage=new FakeFiles();sameImage.Data[image]="verified";
+Reject(()=>InstallTransaction.DeleteSelected(sameImage,image,image),"already-current published ISO cannot be deleted as its own predecessor");
+Check(sameImage.Data[image]=="verified","same-path rejection preserves the current ISO");
+var caseAlias=new FakeFiles();caseAlias.Data["AnimalTown-0.11.24.nkit.iso"]="verified";caseAlias.Data["animaltown-0.11.24.nkit.iso"]="same FAT name";
+Reject(()=>InstallTransaction.DeleteSelected(caseAlias,"AnimalTown-0.11.24.nkit.iso","animaltown-0.11.24.nkit.iso"),"FAT case aliases cannot delete the published ISO");
 foreach(string target in new[]{"gcloader:/My Town.iso","gcloader:/Games/Animal Town/custom.nkit.iso","gcloader:/街/Forêt 🦊.gcm"})foreach(bool after in new[]{false,true})for(int failure=1;failure<=5;failure++){
     var request=LaunchRequest.Parse(Request(target));string staged=request.DownloadPath(mainRelease.Name);
     var files=new FakeFiles{FailAt=failure,FailAfter=after};files.Data[request.Image]="original";files.Data[request.Backup]="older";files.Data[staged]="new";files.Data["gcloader:/AnimalTown.iso"]="unrelated";
@@ -97,8 +145,74 @@ try{
     Check(interrupted,"SD verification observes cancellation");
     header[0]=0;File.WriteAllBytes(path,header);Reject(()=>ImageFiles.ReadVersion(path),"foreign image preserved");
 }finally{Directory.Delete(temporary,true);}
-if(args.Length==1){var live=ReleaseInfo.Parse(File.ReadAllText(args[0]));Check(live.Name.EndsWith(".nkit.iso"),"actual GitHub release metadata");Console.WriteLine("Live release parsed: "+live.Name);}
-Console.WriteLine(checks+" updater checks passed: request paths, current/legacy identities, SHA-256, release selection and interrupted installation.");
+foreach(string name in new[]{"AnimalTown-0.11.24.iso","AnimalTown-1.2.3.nkit.iso","animaltown-2.10.1.NKIT.ISO"}){
+    Check(StableImageDiscovery.TryFileVersion("gcloader:/Games/"+name,out var version)&&ReleaseInfo.ParseStableVersion(version).Length==3,"stable image filename is recognized: "+name);
+}
+foreach(string name in new[]{"AnimalTown.iso","AnimalTown-0.11.24+abcdef123456.nkit.iso","AnimalTown-0.11.24.abcdef123456.iso","AnimalTown-0.11.24.0123456789abcdef0123456789abcdef01234567.iso","AnimalTown-0.11.24-dirty.iso","AnimalTown-0.11.iso","AnimalTown-0.11.24.iso.bak","AnimalTown-0.11.24.iso.update","AnimalTown-0.11.24.gcm","Other-0.11.24.iso","AnimalTown-0.99999999999.0.iso"})
+    Check(!StableImageDiscovery.TryFileVersion("gcloader:/Games/"+name,out _),"non-release and non-ISO filenames are ignored: "+name);
+Check(StableImageDiscovery.CompareVersions("1.0.0","0.999.999")>0&&StableImageDiscovery.CompareVersions("1.10.0","1.9.999")>0&&StableImageDiscovery.CompareVersions("1.10.12","1.10.9")>0,"stable discovery compares all three version components numerically");
+Check(StableImageDiscovery.CompareVersions("1.10.12","1.10.12")==0,"equal stable versions remain a path tie");
+string volume=Path.Combine(Path.GetTempPath(),"animaltown-discovery-"+Guid.NewGuid());Directory.CreateDirectory(volume);
+void Image(string relative,string version,bool game=true,bool magic=true,int length=0x440){
+    string file=Path.Combine(volume,relative.Replace('/',Path.DirectorySeparatorChar));Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+    var data=new byte[length];
+    if(length>=0x440){Encoding.ASCII.GetBytes(game?"AMTE01":"OTHERN").CopyTo(data,0);if(magic)new byte[]{0xc2,0x33,0x9f,0x3d}.CopyTo(data,0x1c);Encoding.ASCII.GetBytes("AnimalTown / "+version).CopyTo(data,0x20);}
+    File.WriteAllBytes(file,data);
+}
+try{
+    Image("AnimalTown-0.99.99.iso","0.99.99");Image("A/AnimalTown-1.0.0.nkit.iso","1.0.0");
+    Image("B/AnimalTown-1.9.99.iso","1.9.99");Image("B/AnimalTown-1.10.9.nkit.iso","1.10.9");
+    Image("A/Forêt 🦊/AnimalTown-1.10.12.iso","1.10.12");
+    Image("AnimalTown-90.0.0+abcdef123456.nkit.iso","90.0.0+abcdef123456");Image("AnimalTown-90.0.0.abcdef123456.iso","90.0.0.abcdef123456");
+    Image("AnimalTown-999.0.0.iso","999.0.0",game:false);Image("AnimalTown-998.0.0.iso","998.0.0",magic:false);
+    Image("AnimalTown-997.0.0.iso","0.11.24");Image("AnimalTown-996.0.0.iso","996.0.0",length:16);
+    Image(".animaltown-update/AnimalTown-1001.0.0.nkit.iso","1001.0.0");
+    Image("nested/.animaltown-update/AnimalTown-1002.0.0.iso","1002.0.0");
+    var selected=await StableImageDiscovery.ScanAsync(volume,default);
+    Check(selected.Version=="1.10.12"&&selected.Path==Path.Combine(volume,"A/Forêt 🦊/AnimalTown-1.10.12.iso"),"recursive scan selects highest numeric stable image and validates its own identity");
+    Check(selected.DownloadPath(mainRelease.Name)==selected.Directory+mainRelease.Name&&selected.DownloadPath(mainRelease.Name).EndsWith("/"+mainRelease.Name),"download keeps the exact GitHub release filename in the selected image directory");
+    foreach(string name in new[]{"../AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24+abcdef123456.nkit.iso","gcloader:/AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24.nkit.iso/other.iso"})
+        Reject(()=>selected.DownloadPath(name),"published stable filename cannot escape the selected directory or introduce a debug build");
+    Image("Z/AnimalTown-1.10.12.nkit.iso","1.10.12");
+    var tied=await StableImageDiscovery.ScanAsync(volume,default);
+    Check(tied.Path==selected.Path,"equal-version duplicates use the deterministic lowest ordinal path");
+    Check(File.Exists(selected.Path)&&File.Exists(Path.Combine(volume,"AnimalTown-999.0.0.iso")),"discovery never deletes selected or rejected images");
+    using var cancelled=new CancellationTokenSource();cancelled.Cancel();bool interrupted=false;
+    try{await StableImageDiscovery.ScanAsync(volume,cancelled.Token);}catch(OperationCanceledException){interrupted=true;}
+    Check(interrupted,"volume discovery observes cancellation before scanning");
+    for(int i=0;i<256;i++)File.WriteAllText(Path.Combine(volume,"unrelated-"+i+".txt"),"unrelated");
+    using var midScanCancellation=new CancellationTokenSource();
+    var previousContext=SynchronizationContext.Current;var deferred=new DeferredContext();Task<StableImage> pending;
+    SynchronizationContext.SetSynchronizationContext(deferred);
+    try{
+        pending=StableImageDiscovery.ScanAsync(volume,midScanCancellation.Token);
+        Check(!pending.IsCompleted&&deferred.Pending>0,"a long volume scan returns to the console scheduler before finishing");
+        midScanCancellation.Cancel();deferred.Drain();
+    }finally{SynchronizationContext.SetSynchronizationContext(previousContext);}
+    interrupted=false;try{await pending;}catch(OperationCanceledException){interrupted=true;}
+    Check(interrupted&&File.Exists(selected.Path),"cancellation after a scan yield releases its enumeration and preserves installed data");
+    Image("AnimalTown-20.0.0.iso","20.0.0");
+    using(var locked=new FileStream(Path.Combine(volume,"AnimalTown-20.0.0.iso"),FileMode.Open,FileAccess.Read,FileShare.None)){
+        bool refused=false;try{await StableImageDiscovery.ScanAsync(volume,default);}catch(IOException){refused=true;}
+        Check(refused,"unreadable candidates abort discovery rather than silently selecting a possibly older ISO");
+    }
+    Check(File.Exists(selected.Path),"discovery I/O failure preserves the previous selected installation");
+}finally{Directory.Delete(volume,true);}
+string empty=Path.Combine(Path.GetTempPath(),"animaltown-empty-"+Guid.NewGuid());Directory.CreateDirectory(empty);
+try{bool refused=false;try{await StableImageDiscovery.ScanAsync(empty,default);}catch(IOException){refused=true;}Check(refused,"missing stable images fail without guessing a target directory");}
+finally{Directory.Delete(empty,true);}
+string broad=Path.Combine(Path.GetTempPath(),"animaltown-broad-"+Guid.NewGuid());Directory.CreateDirectory(broad);
+try{
+    for(int i=0;i<500;i++)Directory.CreateDirectory(Path.Combine(broad,"folder-"+i));
+    var header=new byte[0x440];Encoding.ASCII.GetBytes("AMTE01").CopyTo(header,0);new byte[]{0xc2,0x33,0x9f,0x3d}.CopyTo(header,0x1c);Encoding.ASCII.GetBytes("AnimalTown / 2.0.0").CopyTo(header,0x20);
+    string installed=Path.Combine(broad,"folder-499","AnimalTown-2.0.0.nkit.iso");File.WriteAllBytes(installed,header);
+    Check((await StableImageDiscovery.ScanAsync(broad,default)).Path==installed,"wide sibling directories are scanned completely without consuming one persistent cursor per sibling");
+    string deep=broad;for(int i=0;i<32;i++){deep=Path.Combine(deep,"nested");Directory.CreateDirectory(deep);}
+    bool refused=false;try{await StableImageDiscovery.ScanAsync(broad,default);}catch(IOException){refused=true;}
+    Check(refused&&File.Exists(installed),"unsupported directory depth fails explicitly without returning a partial highest-version result or deleting data");
+}finally{Directory.Delete(broad,true);}
+if(args.Length==1){string liveJson=File.ReadAllText(args[0]);var live=liveJson.TrimStart().StartsWith("{")?ReleaseInfo.ParseStable(liveJson):ReleaseInfo.Parse(liveJson);Check(live.Name.EndsWith(".nkit.iso"),"actual GitHub release metadata");Console.WriteLine("Live release parsed: "+live.Name);}
+Console.WriteLine(checks+" updater checks passed: stable discovery, published filenames, safe deletion, request paths, SHA-256 and interrupted installation.");
 
 sealed class FakeFiles : IInstallFiles
 {
@@ -110,4 +224,12 @@ sealed class FakeFiles : IInstallFiles
     public void Delete(string p){Mutate();Data.Remove(p);After();}
     public void Mark(string p){Mutate();Data.Add(p,"ATUPDATE1");After();}
     public bool HasMarker(string p)=>Data[p]=="ATUPDATE1";
+}
+
+sealed class DeferredContext : SynchronizationContext
+{
+    private readonly Queue<(SendOrPostCallback Callback,object? State)> callbacks=new();
+    internal int Pending=>callbacks.Count;
+    public override void Post(SendOrPostCallback callback,object? state)=>callbacks.Enqueue((callback,state));
+    internal void Drain(){while(callbacks.Count>0){var next=callbacks.Dequeue();next.Callback(next.State);}}
 }

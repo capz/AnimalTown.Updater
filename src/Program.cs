@@ -18,10 +18,11 @@ internal static class Program
             console.Draw(Updater.Status,true,false,Updater.Phase,Updater.DownloadedBytes,Updater.TotalBytes,Updater.Artifact);
         }
         try{
-            task.GetAwaiter().GetResult();
+            using var launch=task.GetAwaiter().GetResult();
             Dolphin.Storage.Storage.Unmount(Dolphin.Storage.StorageDevice.GcLoader);
-            string finished=Updater.TotalBytes>0?"Update complete. Power off and on to start AnimalTown.":"Already up to date. Power off and on to return to AnimalTown.";
-            while(true){Controller.Update();if(Controller.GetState(0).B.WasPressed)return 0;console.Draw(finished,false,false,6,Updater.DownloadedBytes,Updater.TotalBytes,Updater.Artifact);}
+            if(Dolphin.Storage.Storage.IsMounted(Dolphin.Storage.StorageDevice.GcLoader))throw new System.IO.IOException("Could not release GC Loader before Swiss handoff");
+            Dolphin.IO.DolLauncher.RequestLaunch(launch);
+            return 0;
         }catch(Exception error){
             string message=error.Message??"";
             if(message.Length==0)message="The console could not complete this operation.";

@@ -20,58 +20,94 @@ internal static class Updater
     internal static int Phase;
     internal static long DownloadedBytes,TotalBytes;
     internal static string Artifact="";
-    internal static async Task Run(CancellationToken token)
+    internal const string SwissPath=Settings+"swiss.dol";
+    internal static string LaunchImage="";
+    internal static async Task<PreparedDol> Run(CancellationToken token)
     {
         Operation="Read game launch request";Status="Reading game launch information";
-        var request=LaunchRequest.Parse(NativeLaunchArguments.Read());CurrentPath=request.Image;
+        LaunchRequest.Parse(NativeLaunchArguments.Read());
         await Task.Yield();token.ThrowIfCancellationRequested();
-        // The DOL is staged in MEM1. Release the source disc before recovery
-        // can rename its backing image; no updater asset depends on dvd:/.
+        // The updater and its console are resident in MEM1. Never touch an
+        // image while dvd:/ still owns its source volume.
         Operation="Release source disc";CurrentPath="dvd:/";Status="Releasing the game disc";
         Storage.Unmount(StorageDevice.DvdDrive);
         if(Storage.IsMounted(StorageDevice.DvdDrive))throw new IOException("Could not release the updater's source disc");
-        Operation="Mount writable GC Loader volume";CurrentPath=request.Image;Status="Mounting GC Loader SD card";
+        Operation="Mount writable GC Loader volume";CurrentPath="gcloader:/";Status="Mounting GC Loader SD card";
         await Task.Yield();token.ThrowIfCancellationRequested();
-        if(!Storage.Mount(StorageDevice.GcLoader)){NativeResult="GC Loader mount returned false";throw new IOException("GC Loader SD is unavailable or not writable");}
-        var files=new InstallFiles();
-        Operation="Verify installed image before recovery";CurrentPath=request.Image;Status="Checking the installed game image";
-        await Task.Yield();
-        string original=request.Image;
-        if(!files.Exists(original)&&files.Exists(request.Marker)&&files.HasMarker(request.Marker)&&files.Exists(request.Backup))original=request.Backup;
-        CurrentPath=original;request.VerifyInstalledVersion(ImageFiles.ReadVersion(original));
-        Operation="Recover interrupted installation";CurrentPath=request.Image;
-        InstallTransaction.Recover(files,request.Image);
-        Operation="Read installed image header";
-        string local=ImageFiles.ReadVersion(request.Image);request.VerifyInstalledVersion(local);
-        Phase=1;Operation="Start Broadband Adapter";CurrentPath="";Status="Starting Broadband Adapter";await NetworkRuntime.StartAsync(new NetworkOptions(),token);
-        ConfigureTls();
-        using(var http=new HttpClient()){
-            http.MaximumStreamBytes=int.MaxValue;
-            http.DefaultRequestHeaders.Add("User-Agent","AnimalTown-Updater/1");http.DefaultRequestHeaders.Add("Accept","application/vnd.github+json");
-            http.DefaultRequestHeaders.Add("X-GitHub-Api-Version","2022-11-28");
-            Phase=2;Operation="Read latest GitHub release";CurrentPath="https://api.github.com/repos/capz/AnimalTown/releases";Status="Checking GitHub releases";
-            using(var metadata=await http.GetAsync("https://api.github.com/repos/capz/AnimalTown/releases?per_page=1",HttpCompletionOption.ResponseContentRead,token)){
-                metadata.EnsureSuccessStatusCode();var release=ReleaseInfo.Parse(await metadata.Content.ReadAsStringAsync());
-                if(ReleaseInfo.NeedsUpdate(local,release.Version)){
-                    Artifact=release.Name;TotalBytes=release.Size;
-                    string download=request.DownloadPath(release.Name);
-                    Operation="Create image staging directory";CurrentPath=request.DownloadDirectory;System.IO.Directory.CreateDirectory(request.DownloadDirectory);
-                    if(!File.Exists(download))await Download(http,release,download,token);
-                    Phase=4;Operation="Verify downloaded image";CurrentPath=download;Status="Verifying release image";
-                    if(await ImageFiles.HashAsync(download,token)!=release.Digest||ImageFiles.ReadVersion(download)!=release.Version)throw new IOException("Release verification failed; original ISO preserved");
+        if(!Storage.IsMounted(StorageDevice.GcLoader)&&!Storage.Mount(StorageDevice.GcLoader)){NativeResult="GC Loader mount returned false";throw new IOException("GC Loader SD is unavailable or not writable");}
+        Operation="Find highest stable installation";Status="Searching GC Loader for stable AnimalTown images";
+        var selected=await StableImageDiscovery.ScanAsync("gcloader:/",token);
+        CurrentPath=selected.Path;Status="Selected "+selected.Version+" in "+selected.Directory;
+        await Task.Yield();token.ThrowIfCancellationRequested();
+        // Validate and stage the helper before spending an entropy seed or
+        // downloading. Its native image stays resident through the handoff.
+        Operation="Prepare Swiss launch helper";CurrentPath=SwissPath;
+        if(!File.Exists(SwissPath))throw new IOException("Install Swiss with provision.py --swiss before updating");
+        PreparedDol? launch=null;
+        try{
+            string firstTarget=DiscLauncher.GetSwissImagePath(selected.Path);
+            launch=await DolLauncher.PrepareAsync(SwissPath,token);
+            launch.SetArguments(SwissPath,"Autoload="+firstTarget);
+            Phase=1;Operation="Start Broadband Adapter";CurrentPath="";Status="Starting Broadband Adapter";
+            await NetworkRuntime.StartAsync(new NetworkOptions(),token);ConfigureTls();
+            string target=selected.Path;
+            using(var http=new HttpClient()){
+                http.MaximumResponseBytes=65536;http.MaximumStreamBytes=int.MaxValue;
+                http.DefaultRequestHeaders.Add("User-Agent","AnimalTown-Updater/2");http.DefaultRequestHeaders.Add("Accept","application/vnd.github+json");
+                http.DefaultRequestHeaders.Add("X-GitHub-Api-Version","2022-11-28");
+                Phase=2;Status="Checking published numeric releases";
+                var release=await ReadStableRelease(http,token);
+                if(ReleaseInfo.NeedsStableUpdate(selected.Version,release.Version)){
+                    Artifact=release.Name;TotalBytes=release.Size;target=selected.DownloadPath(release.Name);
+                    CurrentPath=target;
+                    // Existing files are never truncated or silently replaced.
+                    // A complete previous download can be reused only after
+                    // checking the exact release digest and embedded version.
+                    if(!File.Exists(target))await Download(http,release,target,token);
+                    Phase=4;Operation="Verify published release image";CurrentPath=target;Status="Verifying release image";
+                    using(var check=File.OpenRead(target))if(check.Length!=release.Size)throw new IOException("Release length does not match; original ISO preserved");
+                    if(await ImageFiles.HashAsync(target,token)!=release.Digest||ImageFiles.ReadVersion(target)!=release.Version)
+                        throw new IOException("Release verification failed; original ISO preserved");
                     DownloadedBytes=TotalBytes;
-                    token.ThrowIfCancellationRequested();Phase=5;Status="Installing "+release.Version;
-                    Operation="Verify installed image before replacement";CurrentPath=request.Image;request.VerifyInstalledVersion(ImageFiles.ReadVersion(request.Image));
-                    Operation="Install verified release";InstallTransaction.Commit(files,request.Image,download);
-                }else Status="Already up to date: "+local;
+                }else Status="No newer stable release; starting "+selected.Version;
             }
+
+            // Close HTTP/TLS and stop the network before the irreversible step.
+            Operation="Stop updater network";CurrentPath=target;TlsConfiguration.Reset();NetworkRuntime.Stop();
+            token.ThrowIfCancellationRequested();
+            Operation="Prepare new image autoload";launch.SetArguments(SwissPath,"Autoload="+DiscLauncher.GetSwissImagePath(target));
+            Operation="Revalidate selected installation";CurrentPath=selected.Path;
+            if(ImageFiles.ReadVersion(selected.Path)!=selected.Version)throw new IOException("The selected installation changed during the update");
+            if(StableImageDiscovery.ComparePaths(selected.Path,target)!=0){
+                Phase=5;Operation="Delete selected old installation";Status="Installing the verified release";
+                InstallTransaction.DeleteSelected(new InstallFiles(),selected.Path,target);
+            }
+            LaunchImage=target;Phase=6;Operation="Launch selected image through Swiss";CurrentPath=target;Status="Starting AnimalTown";
+            var prepared=launch;launch=null;return prepared;
+        }catch{
+            launch?.Dispose();
+            try{TlsConfiguration.Reset();NetworkRuntime.Stop();}catch{ }
+            throw;
         }
-        TlsConfiguration.Reset();NetworkRuntime.Stop();
-        Phase=6;Operation="Release updated data volume";CurrentPath=request.Image;Status="Update complete. Power off and on to start AnimalTown.";
+    }
+    private static async Task<ReleaseInfo> ReadStableRelease(HttpClient http,CancellationToken token)
+    {
+        int page=1;
+        while(true){
+            token.ThrowIfCancellationRequested();Operation="Read numeric release page "+page;
+            CurrentPath="https://api.github.com/repos/capz/AnimalTown/releases?per_page=1&page="+page;
+            using(var metadata=await http.GetAsync(CurrentPath,HttpCompletionOption.ResponseContentRead,token)){
+                metadata.EnsureSuccessStatusCode();var release=ReleaseInfo.ParseStablePage(await metadata.Content.ReadAsStringAsync(),out bool exhausted);
+                if(release!=null)return release;
+                if(exhausted)throw new IOException("No published numeric AnimalTown release was found");
+            }
+            if(page==int.MaxValue)throw new IOException("GitHub release pagination overflow");
+            page++;await Task.Yield();
+        }
     }
     private static async Task Download(HttpClient http,ReleaseInfo release,string destination,CancellationToken token)
     {
-        Phase=3;Operation="Download verified release to staging";CurrentPath=destination;DownloadedBytes=0;TotalBytes=release.Size;Status="Downloading release image";
+        Phase=3;Operation="Download stable release";CurrentPath=destination;DownloadedBytes=0;TotalBytes=release.Size;Status="Downloading release image";
         using var response=await http.GetAsync(release.Url,HttpCompletionOption.ResponseHeadersRead,token);response.EnsureSuccessStatusCode();
         // GitHub metadata bounds the reservation. No ISO-sized managed allocation.
         using var body=await response.Content.ReadAsStreamAsync();

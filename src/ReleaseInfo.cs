@@ -8,9 +8,11 @@ internal sealed class ReleaseInfo
 {
     internal string Version="",Name="",Url="",Digest="";
     internal int Size;
-    internal static ReleaseInfo Parse(string json)
+    internal static ReleaseInfo Parse(string json)=>ParseDocument(json,false);
+    internal static ReleaseInfo ParseStable(string json)=>ParseDocument(json,true);
+    private static ReleaseInfo ParseDocument(string json,bool stable)
     {
-        var r=new JsonReader(json);Need(r,JsonTokenType.StartArray);Need(r,JsonTokenType.StartObject);
+        var r=new JsonReader(json);if(!stable)Need(r,JsonTokenType.StartArray);Need(r,JsonTokenType.StartObject);
         string tag="";bool draft=true;var assets=new Dolphin.Collections.List<ReleaseInfo>();
         while(r.Read()&&r.TokenType!=JsonTokenType.EndObject){
             if(r.TokenType!=JsonTokenType.PropertyName)throw new FormatException("Invalid GitHub release");string key=r.Value;
@@ -30,8 +32,9 @@ internal sealed class ReleaseInfo
                 }
             }else Skip(r);
         }
-        Need(r,JsonTokenType.EndArray);if(r.Read())throw new FormatException();
+        if(!stable)Need(r,JsonTokenType.EndArray);if(r.Read())throw new FormatException();
         if(draft||tag.Length<2||tag[0]!='v')throw new IOException("No published AnimalTown release");string version=tag.Substring(1);ParseVersion(version);
+        if(stable)ParseStableVersion(version);
         ReleaseInfo? result=null;
         for(int i=0;i<assets.Count;i++)if(assets[i].Name=="AnimalTown-"+version+".nkit.iso"){
             if(result!=null)throw new IOException("Duplicate NKit asset");result=assets[i];
@@ -48,6 +51,29 @@ internal sealed class ReleaseInfo
         // neither those counters nor the commit hash form a total ordering.
         return local!=latest;
     }
+    internal static bool NeedsStableUpdate(string local,string latest)=>StableImageDiscovery.CompareVersions(local,latest)<0;
+    // Every repository build is a GitHub prerelease, including main. Numeric
+    // M.m.p identity, rather than that flag, distinguishes stable installations.
+    // One release per page keeps metadata bounded in the 1 MiB managed heap.
+    internal static ReleaseInfo? ParseStablePage(string json,out bool exhausted)
+    {
+        exhausted=false;var r=new JsonReader(json);Need(r,JsonTokenType.StartArray);
+        if(!r.Read())throw new FormatException("Invalid GitHub release page");
+        if(r.TokenType==JsonTokenType.EndArray){if(r.Read())throw new FormatException();exhausted=true;return null;}
+        if(r.TokenType!=JsonTokenType.StartObject)throw new FormatException("Invalid GitHub release page");
+        string tag="";bool draft=true;
+        while(r.Read()&&r.TokenType!=JsonTokenType.EndObject){
+            if(r.TokenType!=JsonTokenType.PropertyName)throw new FormatException("Invalid GitHub release page");
+            string key=r.Value;if(!r.Read())throw new FormatException();
+            if(key=="tag_name")tag=Text(r);else if(key=="draft")draft=r.TokenType!=JsonTokenType.False;else Skip(r);
+        }
+        Need(r,JsonTokenType.EndArray);if(r.Read())throw new FormatException();
+        if(draft||tag.Length<2||tag[0]!='v')return null;
+        try{ParseStableVersion(tag.Substring(1));}catch(FormatException){return null;}
+        // A numeric release with damaged/missing assets is a real error. Do not
+        // quietly fall back to an older release after an integrity failure.
+        return Parse(json);
+    }
     internal static int[] ParseVersion(string text)
     {
         if(text==null)throw new FormatException("Missing AnimalTown version");
@@ -63,6 +89,13 @@ internal sealed class ReleaseInfo
         // legacy dot-separated 12/40hex identities readable for old installs.
         if(separator=='+'?remaining!=12:separator!='.'||remaining!=12&&remaining!=40)throw new FormatException("Invalid build identity");
         for(;at<text.Length;at++)if(Hex(text[at])<0)throw new FormatException("Invalid build identity");return values;
+    }
+    internal static int[] ParseStableVersion(string text)
+    {
+        var values=ParseVersion(text);int dots=0;
+        for(int i=0;i<text.Length;i++)if(text[i]=='.')dots++;else if(text[i]<'0'||text[i]>'9')throw new FormatException("Stable versions require three numeric counters");
+        if(dots!=2)throw new FormatException("Debug builds are not stable installations");
+        return values;
     }
     internal static int Hex(char c)=>c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:c>='A'&&c<='F'?c-'A'+10:-1;
     private static bool AssetUrl(string url,string tag,string name)
