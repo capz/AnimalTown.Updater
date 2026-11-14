@@ -12,8 +12,8 @@
  * The runner checks that shape before inserting nonallocating observations. */
 typedef struct Block {uint32_t size;uint8_t marked,free;uint16_t reserved;struct Block *next;} Block;
 static size_t peak_used,total_allocated,allocations,peak_post_gc_live;
-static size_t entries,opens,header_bytes,highest_header_bytes,highest_entry_index;
-static int highest_handle;
+static size_t entries,opens,header_bytes,highest_header_bytes,highest_entry_index,swiss_probe_bytes;
+static int highest_handle,swiss_probe_handle;
 static bool in_scan_read,fault_observed;
 static unsigned injected;
 #ifdef DND_SCAN_NATIVE_FAULT
@@ -40,15 +40,20 @@ int dnd_scan_open(DndString *path,int mode,int access,int share)
     for(size_t i=0;highest&&i<sizeof(suffix)-1;i++)
         if(path->chars[path->length-(sizeof(suffix)-1)+i]!=(unsigned char)suffix[i])highest=false;
     if(highest){highest_handle=handle;highest_entry_index=entries;}
+    static const char probe[]="/swiss-streaming-fixture/renamed.DOL";
+    bool swiss=path&&path->length>=sizeof(probe)-1;
+    for(size_t i=0;swiss&&i<sizeof(probe)-1;i++)
+        if(path->chars[path->length-(sizeof(probe)-1)+i]!=(unsigned char)probe[i])swiss=false;
+    if(swiss)swiss_probe_handle=handle;
     return handle;
 }
 int dnd_scan_read(int handle,DndArray *data,int offset,int count)
 {
     int n=dnd_fs_read(handle,data,offset,count);
-    if(n>0){header_bytes+=(size_t)n;if(handle==highest_handle)highest_header_bytes+=(size_t)n;}
+    if(n>0){header_bytes+=(size_t)n;if(handle==highest_handle)highest_header_bytes+=(size_t)n;if(handle==swiss_probe_handle)swiss_probe_bytes+=(size_t)n;}
     return n;
 }
-void dnd_scan_close(int handle){if(handle==highest_handle)highest_handle=0;dnd_fs_close(handle);}
+void dnd_scan_close(int handle){if(handle==highest_handle)highest_handle=0;if(handle==swiss_probe_handle)swiss_probe_handle=0;dnd_fs_close(handle);}
 void dnd_scan_heap_allocated(DndManagedHeap *heap,size_t bytes)
 {
     allocations++;total_allocated+=bytes;
@@ -85,7 +90,7 @@ int main(int argc,char **argv)
     int exception=dnd_exception_pending()?dnd_exception_kind():0,handles=dnd_fs_open_handles();
     printf("SCAN_HEAP capacity=%zu peak_used=%zu peak_post_gc_live=%zu total_allocated=%zu allocations=%zu collections=%zu final_used=%zu result=%ld exception=%d handles=%d\n",
            capacity,peak_used,peak_post_gc_live,total_allocated,allocations,heap.collections,heap.used,(long)result,exception,handles);
-    printf("SCAN_IO entries=%zu image_opens=%zu header_bytes=%zu highest_header_bytes=%zu highest_entry_index=%zu\n",entries,opens,header_bytes,highest_header_bytes,highest_entry_index);
+    printf("SCAN_IO entries=%zu image_opens=%zu header_bytes=%zu highest_header_bytes=%zu highest_entry_index=%zu swiss_probe_bytes=%zu\n",entries,opens,header_bytes,highest_header_bytes,highest_entry_index,swiss_probe_bytes);
     if(result||dnd_exception_pending()||handles){
         fprintf(stderr,"Native scan failed: exception=%d message=%s\n",exception,dnd_exception_message());
         DndException *error=(DndException*)dnd_exception_object();
@@ -98,6 +103,8 @@ int main(int argc,char **argv)
     }else{
         assert(!injected&&!fault_observed&&highest_header_bytes==0x440);
         setting=getenv("DND_SCAN_EXPECT_ENTRIES");if(setting)assert(entries==(size_t)strtoull(setting,NULL,10));
+        setting=getenv("DND_SCAN_EXPECT_IMAGE_ENTRIES");if(setting)assert(highest_entry_index<=(size_t)strtoull(setting,NULL,10));
+        setting=getenv("DND_SCAN_EXPECT_SWISS_BYTES");if(setting)assert(swiss_probe_bytes==(size_t)strtoull(setting,NULL,10));
     }
     free(memory);return 0;
 }

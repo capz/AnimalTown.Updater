@@ -3,5 +3,6 @@
   <ItemGroup><Compile Remove="UiPreview/**/*.cs;ScanAotSmoke/**/*.cs" /></ItemGroup>
   <ItemGroup><None Update="Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup><Compile Include="../src/StableImageDiscovery.cs" Link="StableImageDiscovery.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../src/SwissDiscovery.cs" Link="SwissDiscovery.cs" /><Compile Include="../src/SwissBuilds.cs" Link="SwissBuilds.cs" /></ItemGroup>
   <ItemGroup><PackageReference Include="DolphinDotNet.Core" Version="[0.1.0-updater.7]" /><Compile Include="../src/ConsoleText.cs" Link="ConsoleText.cs" /><Compile Include="../src/ReleaseInfo.cs" Link="ReleaseInfo.cs" /><Compile Include="../src/LaunchRequest.cs" Link="LaunchRequest.cs" /><Compile Include="../src/Sha256.cs" Link="Sha256.cs" /><Compile Include="../src/ImageFiles.cs" Link="ImageFiles.cs" /></ItemGroup>
 </Project>

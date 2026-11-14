@@ -20,7 +20,6 @@ internal static class Updater
     internal static int Phase;
     internal static long DownloadedBytes,TotalBytes;
     internal static string Artifact="";
-    internal const string SwissPath=Settings+"swiss.dol";
     internal static string LaunchImage="";
     internal static async Task<PreparedDol> Run(CancellationToken token)
     {
@@ -41,13 +40,14 @@ internal static class Updater
         await Task.Yield();token.ThrowIfCancellationRequested();
         // Validate and stage the helper before spending an entropy seed or
         // downloading. Its native image stays resident through the handoff.
-        Operation="Prepare Swiss launch helper";CurrentPath=SwissPath;
-        if(!File.Exists(SwissPath))throw new IOException("Install Swiss with provision.py --swiss before updating");
+        Operation="Prepare Swiss launch helper";CurrentPath="gcloader:/";Status="Finding Swiss on the GC Loader drive root";
+        var swiss=await SwissDiscovery.FindAsync("gcloader:/",token,static path=>CurrentPath=path);
+        string swissPath=swiss.Path;CurrentPath=swissPath;Status="Preparing Swiss r"+swiss.Revision;
         PreparedDol? launch=null;
         try{
             string firstTarget=DiscLauncher.GetSwissImagePath(selected.Path);
-            launch=await DolLauncher.PrepareAsync(SwissPath,token);
-            launch.SetArguments(SwissPath,"Autoload="+firstTarget);
+            launch=await DolLauncher.PrepareAsync(swissPath,token);
+            launch.SetArguments(swissPath,"Autoload="+firstTarget);
             Phase=1;Operation="Start Broadband Adapter";CurrentPath="";Status="Starting Broadband Adapter";
             await NetworkRuntime.StartAsync(new NetworkOptions(),token);ConfigureTls();
             string target=selected.Path;
@@ -75,7 +75,7 @@ internal static class Updater
             // Close HTTP/TLS and stop the network before the irreversible step.
             Operation="Stop updater network";CurrentPath=target;TlsConfiguration.Reset();NetworkRuntime.Stop();
             token.ThrowIfCancellationRequested();
-            Operation="Prepare new image autoload";launch.SetArguments(SwissPath,"Autoload="+DiscLauncher.GetSwissImagePath(target));
+            Operation="Prepare new image autoload";launch.SetArguments(swissPath,"Autoload="+DiscLauncher.GetSwissImagePath(target));
             Operation="Revalidate selected installation";CurrentPath=selected.Path;
             if(ImageFiles.ReadVersion(selected.Path)!=selected.Version)throw new IOException("The selected installation changed during the update");
             Phase=5;Operation="Select and verify GC Loader image";CurrentPath=target;Status="Selecting and verifying the game disc";

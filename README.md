@@ -57,7 +57,7 @@ image needs a stable versioned filename for discovery. For example:
 ```text
 /games/AnimalTown/AnimalTown-0.11.36.nkit.iso
 /animal-town-updater.dol
-/animaltown-updater/swiss.dol
+/boot.dol
 /animaltown-updater/roots.pem
 /animaltown-updater/entropy.bin
 /animaltown-updater/utc-offset-minutes.txt
@@ -67,7 +67,22 @@ The updater DOL is normally embedded in the game image; the SD-root DOL is a
 fallback for discs assembled without it. Settings remain in the SD-root
 `animaltown-updater/` folder even when the image is in a subfolder.
 
-Install a Swiss DOL from an official Swiss release with the setup tool.
+Place a supported official normal Swiss DOL at the drive root. Its filename can
+stay `boot.dol`, `swiss_r2119.dol`, `SWISS.DOL` or another `.dol` name. The updater
+checks file contents, chooses the newest recognized revision and uses a
+deterministic path ordering for duplicates. It does not search subdirectories
+for Swiss. The old `animaltown-updater/swiss.dol` location remains a
+content-validated fallback when no supported root DOL is found.
+
+DOL headers describe executable layout and do not contain a Swiss identity.
+Official Swiss payloads are compressed, so the updater validates layout/launch
+arguments and streams a SHA-256 fingerprint through a fixed 16 KiB buffer.
+The catalog covers 12 official normal releases, including r2119; exact revisions
+and official checksum provenance are in [build/swiss-builds.json](build/swiss-builds.json).
+New or custom builds need a catalog update. Use the archive's normal
+`DOL/swiss_rXXXX.dol`, since legacy-LZ variants cannot accept launch arguments.
+No Swiss binary is bundled with the updater.
+
 The SDK stages and validates that executable before deleting an ISO, then passes
 `Autoload=gcldr:/.../<published filename>` to Swiss. The updater selects and
 verifies the new physical mapping before deleting the old image. Swiss performs
@@ -78,10 +93,13 @@ HTTPS requires explicit trusted CA roots, fresh private entropy and a correct
 clock. On a trusted computer, with the SD mounted, run:
 
 ```sh
-python3 tools/provision.py /path/to/SD --swiss /path/to/swiss.dol --roots /path/to/ca-bundle.pem --utc-offset-minutes 60
+python3 tools/provision.py /path/to/SD --roots /path/to/ca-bundle.pem --utc-offset-minutes 60
 ```
 
-Later provisioning can reuse the installed Swiss helper by omitting `--swiss`.
+Provisioning does not require installing or renaming Swiss. Optionally add
+`--swiss /path/to/swiss_r2119.dol` to verify and copy that supported official
+file to the SD root as `swiss.dol`. Existing root DOLs remain untouched when
+the option is omitted.
 The optional `--image` argument remains for older games that require a legacy
 mapping; the new updater ignores that mapping and discovers stable images.
 

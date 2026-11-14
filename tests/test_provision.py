@@ -4,6 +4,9 @@ import importlib.util
 import io
 import os
 import struct
+import hashlib
+import json
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -27,7 +30,9 @@ class ProvisionTests(unittest.TestCase):
         dol = bytearray(0x120)
         for offset, value in ((0, 0x100), (0x48, 0x80003100), (0x90, 32), (0xe0, 0x80003100)):
             struct.pack_into('>I', dol, offset, value)
+        dol[0x104:0x108] = b'_arg'
         self.swiss.write_bytes(dol)
+        self.fixture_build = (1, len(dol), hashlib.sha256(dol).hexdigest())
         self.folder = self.root / 'animaltown-updater'
         self.record = self.folder / 'image-path.txt'
 
@@ -49,7 +54,7 @@ class ProvisionTests(unittest.TestCase):
         if image is not None:
             args += ['--image', str(image)]
         output = io.StringIO()
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output), mock.patch.object(provision.os, 'urandom', return_value=b'Q' * 48):
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output), mock.patch.object(provision.os, 'urandom', return_value=b'Q' * 48), mock.patch.object(provision, 'SWISS_BUILDS', (*provision.SWISS_BUILDS, self.fixture_build)):
             provision.main(args + list(extra))
         return output.getvalue()
 
@@ -94,7 +99,7 @@ class ProvisionTests(unittest.TestCase):
         output = self.invoke()
         self.assertFalse(self.record.exists())
         self.assertIn('discovered automatically', output)
-        self.assertEqual((self.folder / 'swiss.dol').read_bytes(), self.swiss.read_bytes())
+        self.assertEqual((self.root / 'swiss.dol').read_bytes(), self.swiss.read_bytes())
         self.assertEqual(len((self.folder / 'entropy.bin').read_bytes()), 48)
 
     def test_existing_valid_record_is_preserved_byte_exact(self):
@@ -179,7 +184,7 @@ class ProvisionTests(unittest.TestCase):
         self.old_inputs(b'P' * 64)
         self.record.write_bytes(b'gcloader:/Missing old.iso\n')
         originals = {name: (self.folder / name).read_bytes() for name in ('roots.pem', 'utc-offset-minutes.txt', 'entropy.bin')}
-        with mock.patch.object(provision.os, 'urandom', side_effect=AssertionError('mapping-only must not generate entropy')):
+        with mock.patch.object(provision.os, 'urandom', side_effect=AssertionError('mapping-only must not generate entropy')), mock.patch.object(provision, 'SWISS_BUILDS', (*provision.SWISS_BUILDS, self.fixture_build)):
             # Record-only repair does not depend on a new PC CA bundle either.
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
@@ -190,13 +195,18 @@ class ProvisionTests(unittest.TestCase):
             self.assertEqual((self.folder / name).read_bytes(), data)
         self.reject_unchanged(swiss=False)
 
-    def test_swiss_is_required_for_first_setup_and_reused_later(self):
-        self.reject_unchanged(swiss=False)
+    def test_swiss_install_is_optional_and_existing_root_names_are_preserved(self):
+        self.invoke(swiss=False)
+        self.assertFalse((self.root / 'swiss.dol').exists())
+        self.assertEqual(len((self.folder / 'entropy.bin').read_bytes()), 48)
+        (self.folder / 'entropy.bin').unlink()
         self.invoke()
-        installed = (self.folder / 'swiss.dol').read_bytes()
+        installed = (self.root / 'swiss.dol').read_bytes()
+        (self.root / 'swiss.dol').rename(self.root / 'BOOT.DOL')
         (self.folder / 'entropy.bin').unlink()
         self.invoke(swiss=False)
-        self.assertEqual((self.folder / 'swiss.dol').read_bytes(), installed)
+        self.assertEqual((self.root / 'BOOT.DOL').read_bytes(), installed)
+        self.assertFalse((self.root / 'swiss.dol').exists())
 
     def test_invalid_swiss_preserves_existing_launch_inputs(self):
         self.old_inputs(b'S' * 48)
@@ -206,9 +216,23 @@ class ProvisionTests(unittest.TestCase):
                 self.reject_unchanged()
 
     def test_existing_swiss_cannot_escape_the_sd_root(self):
-        self.folder.mkdir()
-        (self.folder / 'swiss.dol').symlink_to(self.swiss)
-        self.reject_unchanged(swiss=False)
+        (self.root / 'swiss.dol').symlink_to(self.swiss)
+        self.reject_unchanged()
+
+    def test_valid_but_unrecognized_dol_is_not_installed_as_swiss(self):
+        data = bytearray(self.swiss.read_bytes());data[-1] = 1
+        self.swiss.write_bytes(data)
+        self.reject_unchanged()
+
+    def test_catalog_matches_verified_manifest_and_managed_discovery(self):
+        repository = Path(__file__).resolve().parents[1]
+        manifest = json.loads((repository / 'build/swiss-builds.json').read_text())
+        expected = {(row['revision'], row['bytes'], row['sha256']) for row in manifest}
+        self.assertEqual(set(provision.SWISS_BUILDS), expected)
+        source = (repository / 'src/SwissBuilds.cs').read_text()
+        managed = {(int(revision), int(length), digest) for revision, length, digest in re.findall(r'new SwissBuild\(\s*(\d+)\s*,\s*(\d+)\s*,\s*"([0-9a-f]{64})"\s*\)', source)}
+        self.assertEqual(managed, expected)
+        self.assertTrue(all(row['releaseChecksumMatches'] and row['argAbi'] for row in manifest))
 
     def test_bad_or_escaping_existing_seed_does_not_authorize_mapping_changes(self):
         path = self.image()

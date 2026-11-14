@@ -234,7 +234,95 @@ try{
     bool refused=false;try{await StableImageDiscovery.ScanAsync(broad,default);}catch(IOException){refused=true;}
     Check(refused&&File.Exists(installed),"unsupported directory depth fails explicitly without returning a partial highest-version result or deleting data");
 }finally{Directory.Delete(broad,true);}
-if(args.Length==1){string liveJson=File.ReadAllText(args[0]);var live=liveJson.TrimStart().StartsWith("{")?ReleaseInfo.ParseStable(liveJson):ReleaseInfo.Parse(liveJson);Check(live.Name.EndsWith(".nkit.iso"),"actual GitHub release metadata");Console.WriteLine("Live release parsed: "+live.Name);}
+byte[] SwissDol(byte identity){
+    var data=new byte[0x180];
+    void Word(int at,uint value){data[at]=(byte)(value>>24);data[at+1]=(byte)(value>>16);data[at+2]=(byte)(value>>8);data[at+3]=(byte)value;}
+    Word(0,0x100);Word(0x48,0x80004000);Word(0x90,0x80);Word(0xe0,0x80004000);Word(0x104,0x5f617267);data[0x130]=identity;return data;
+}
+SwissBuild SwissIdentity(int revision,byte[] data)=>new SwissBuild(revision,data.Length,Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant());
+string swissVolume=Path.Combine(Path.GetTempPath(),"animaltown-swiss-"+Guid.NewGuid());Directory.CreateDirectory(swissVolume);
+void ClearSwiss(){Directory.Delete(swissVolume,true);Directory.CreateDirectory(swissVolume);}
+string SwissFile(string relative,byte[] data){string path=Path.Combine(swissVolume,relative);Directory.CreateDirectory(Path.GetDirectoryName(path)!);File.WriteAllBytes(path,data);return path;}
+var oldSwiss=SwissDol(1);var newSwiss=SwissDol(2);var nestedSwiss=SwissDol(3);
+var swissCatalog=new[]{SwissIdentity(100,oldSwiss),SwissIdentity(200,newSwiss),SwissIdentity(300,nestedSwiss)};
+try{
+    string arbitrary=SwissFile("Forêt boot.DOL",newSwiss);bool reported=false;
+    var helper=await SwissDiscovery.FindAsync(swissVolume,default,path=>{if(path==arbitrary)reported=true;},swissCatalog);
+    Check(helper.Path==arbitrary&&helper.Revision==200&&reported,"root Swiss identity comes from bytes despite an arbitrary Unicode uppercase-DOL filename");
+    string misleading=SwissFile("swiss_r999999.dol",oldSwiss);
+    Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==arbitrary,"binary revision wins over a misleading versioned filename");
+    string tie=SwissFile("A duplicate.dol",newSwiss);
+    Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==tie,"equal Swiss revisions use deterministic case-insensitive ordinal paths");
+    Check(SwissDiscovery.IsDolPath("SWISS.DOL")&&!SwissDiscovery.IsDolPath("swiss.dol.bak")&&!SwissDiscovery.IsDolPath("swiss.dol/"),"Swiss candidate extension checks are case-insensitive and exact");
+    ClearSwiss();string nested=SwissFile("nested/swiss_r300.dol",nestedSwiss);
+    bool missing=false;try{await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog);}catch(IOException error){missing=error.Message.Contains("drive root");}
+    Check(missing&&File.Exists(nested),"Swiss discovery ignores nested executables and explains root placement without modifying them");
+    string fallback=SwissFile("animaltown-updater/swiss.dol",newSwiss);
+    string rootOld=SwissFile("boot.dol",oldSwiss);
+    Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==rootOld,"a supported root Swiss takes priority over a newer legacy private helper");
+    File.Delete(rootOld);
+    Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==fallback,"an existing private helper remains a content-validated fallback when root has none");
+    File.WriteAllBytes(fallback,SwissDol(4));
+    missing=false;try{await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog);}catch(IOException){missing=true;}
+    Check(missing&&File.ReadAllBytes(fallback).SequenceEqual(SwissDol(4)),"an unlisted private helper cannot bypass identity checks and remains untouched");
+    ClearSwiss();
+    foreach(string defect in new[]{"header","argument","truncated","overlap","entry","bss","unlisted"}){
+        var invalid=SwissDol(5);
+        if(defect=="header")invalid[0]=0xff;
+        if(defect=="argument")invalid[0x104]=0;
+        if(defect=="truncated")invalid=invalid[..^1];
+        if(defect=="overlap"){invalid[6]=1;invalid[7]=0x10;invalid[0x4c]=0x80;invalid[0x4d]=0;invalid[0x4e]=0x40;invalid[0x4f]=0x10;invalid[0x97]=4;}
+        if(defect=="entry")invalid[0xe3]=1;
+        if(defect=="bss"){invalid[0xd8]=0x81;invalid[0xd9]=0x80;invalid[0xdf]=1;}
+        string invalidPath=SwissFile("swiss.dol",invalid);
+        var candidates=defect=="unlisted"?swissCatalog:new[]{SwissIdentity(999,invalid)};
+        missing=false;try{await SwissDiscovery.FindAsync(swissVolume,default,null,candidates);}catch(IOException){missing=true;}
+        Check(missing&&File.ReadAllBytes(invalidPath).SequenceEqual(invalid),"Swiss discovery rejects "+defect+" content without trusting its name or catalog row alone");
+    }
+    ClearSwiss();string lockedSwiss=SwissFile("swiss.dol",newSwiss);string stoppedAt="";
+    using(var locked=new FileStream(lockedSwiss,FileMode.Open,FileAccess.Read,FileShare.None)){
+        bool refused=false;try{await SwissDiscovery.FindAsync(swissVolume,default,path=>stoppedAt=path,swissCatalog);}catch(IOException){refused=true;}
+        Check(refused&&stoppedAt==lockedSwiss,"unreadable root DOL aborts discovery with its actual path rather than selecting a partial result");
+    }
+    Check(File.ReadAllBytes(lockedSwiss).SequenceEqual(newSwiss),"Swiss read failure preserves the executable");
+    using var beforeCancel=new CancellationTokenSource();beforeCancel.Cancel();bool wasCancelled=false;
+    try{await SwissDiscovery.FindAsync(swissVolume,beforeCancel.Token,null,swissCatalog);}catch(OperationCanceledException){wasCancelled=true;}
+    Check(wasCancelled,"Swiss discovery observes cancellation before opening a directory");
+    for(int i=0;i<100;i++)File.WriteAllText(Path.Combine(swissVolume,"unrelated-"+i+".txt"),"keep");
+    using var scanCancel=new CancellationTokenSource();var oldContext=SynchronizationContext.Current;var queued=new DeferredContext();Task<SwissImage> scan;
+    SynchronizationContext.SetSynchronizationContext(queued);
+    try{
+        scan=SwissDiscovery.FindAsync(swissVolume,scanCancel.Token,null,swissCatalog);
+        Check(!scan.IsCompleted&&queued.Pending>0,"a wide root Swiss search yields without retaining a whole directory listing");
+        scanCancel.Cancel();queued.Drain();
+    }finally{SynchronizationContext.SetSynchronizationContext(oldContext);}
+    wasCancelled=false;try{await scan;}catch(OperationCanceledException){wasCancelled=true;}
+    Check(wasCancelled&&File.ReadAllBytes(lockedSwiss).SequenceEqual(newSwiss),"cancelled Swiss discovery closes its cursor and leaves files unchanged");
+    ClearSwiss();var largeSwiss=new byte[131072];newSwiss.CopyTo(largeSwiss,0);largeSwiss[^1]=73;
+    string hashing=SwissFile("boot.dol",largeSwiss);var largeIdentity=new[]{SwissIdentity(400,largeSwiss)};
+    using var hashCancel=new CancellationTokenSource();oldContext=SynchronizationContext.Current;queued=new DeferredContext();
+    SynchronizationContext.SetSynchronizationContext(queued);
+    try{
+        scan=SwissDiscovery.FindAsync(swissVolume,hashCancel.Token,null,largeIdentity);
+        Check(!scan.IsCompleted&&queued.Pending>0,"Swiss content hashing yields with a fixed buffer before completing a larger executable");
+        hashCancel.Cancel();queued.Drain();
+    }finally{SynchronizationContext.SetSynchronizationContext(oldContext);}
+    wasCancelled=false;try{await scan;}catch(OperationCanceledException){wasCancelled=true;}
+    using(var reopened=new FileStream(hashing,FileMode.Open,FileAccess.Read,FileShare.None))
+        Check(wasCancelled&&reopened.Length==largeSwiss.Length,"cancellation during Swiss hashing closes the file before returning and preserves its length");
+}finally{Directory.Delete(swissVolume,true);}
+if(args.Length==2&&args[0]=="--swiss-directory"){
+    string officialVolume=Path.Combine(Path.GetTempPath(),"animaltown-official-swiss-"+Guid.NewGuid());Directory.CreateDirectory(officialVolume);
+    try{
+        foreach(string sample in Directory.EnumerateFiles(args[1],"*.dol")){
+            byte[] bytes=File.ReadAllBytes(sample);string digest=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            var identity=SwissBuilds.Official.Single(x=>x.Length==bytes.Length&&x.Digest==digest);
+            string target=Path.Combine(officialVolume,"arbitrary-name.DOL");File.Copy(sample,target,true);
+            var found=await SwissDiscovery.FindAsync(officialVolume,default);
+            Check(found.Path==target&&found.Revision==identity.Revision,"actual official Swiss normal DOL identified from its contents r"+identity.Revision);
+        }
+    }finally{Directory.Delete(officialVolume,true);}
+}else if(args.Length==1){string liveJson=File.ReadAllText(args[0]);var live=liveJson.TrimStart().StartsWith("{")?ReleaseInfo.ParseStable(liveJson):ReleaseInfo.Parse(liveJson);Check(live.Name.EndsWith(".nkit.iso"),"actual GitHub release metadata");Console.WriteLine("Live release parsed: "+live.Name);}
 Console.WriteLine(checks+" updater checks passed: stable discovery, published filenames, verified selection before deletion, request paths, SHA-256 and interrupted installation.");
 
 sealed class FakeFiles : IInstallFiles

@@ -19,5 +19,7 @@
     <Compile Include="../../src/ImageFiles.cs" Link="ImageFiles.cs" />
     <Compile Include="../../src/ReleaseInfo.cs" Link="ReleaseInfo.cs" />
     <Compile Include="../../src/Sha256.cs" Link="Sha256.cs" />
+    <Compile Include="../../src/SwissDiscovery.cs" Link="SwissDiscovery.cs" />
+    <Compile Include="../../src/SwissBuilds.cs" Link="SwissBuilds.cs" />
   </ItemGroup>
 </Project>

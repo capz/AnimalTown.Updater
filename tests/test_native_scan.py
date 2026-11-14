@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import subprocess
+import struct
 import sys
 import tempfile
 
@@ -40,6 +41,14 @@ def fixture(root,scenario,width,highest_created_first=False):
 
 def snapshot(volume):
     return {str(p.relative_to(volume)):None if p.is_dir() else hashlib.sha256(p.read_bytes()).hexdigest() for p in volume.rglob('*')}
+
+def swiss_fixture(volume):
+    data=bytearray(2*1024*1024+256)
+    for offset,value in ((0,0x100),(0x48,0x80004000),(0x90,0x80),(0xe0,0x80004000),(0x104,0x5f617267)):
+        struct.pack_into('>I',data,offset,value)
+    data[0x120]=0x53
+    path=volume/'swiss-streaming-fixture/renamed.DOL';path.parent.mkdir();path.write_bytes(data)
+    assert hashlib.sha256(data).hexdigest()=='442ed67973d6f2e9a689f7aa823b100915d6da9777b0a2476d55f4e23d6b74d2'
 
 def instrument_runtime(sdk,output):
     source=(sdk/'source/managed_runtime.c').read_text()
@@ -96,9 +105,14 @@ def main():
         with tempfile.TemporaryDirectory(prefix='volume-'+scenario+'-',dir=work) as fixture_root:
             volume_root=Path(fixture_root)
             volume=fixture(volume_root,scenario,args.width if scenario!='deep' else min(args.width,100),args.highest_created_first)
+            if args.updater:swiss_fixture(volume)
             before=snapshot(volume)
             env=dict(os.environ,DND_STORAGE_ROOT=str(volume_root),DND_ASYNC_MANUAL='1',DND_SCAN_HEAP_BYTES='1048576')
-            env['DND_SCAN_EXPECT_ENTRIES']=str(len(before))
+            # Production Swiss discovery makes a second top-directory pass;
+            # the injected-catalog streaming fixture makes one additional pass.
+            env['DND_SCAN_EXPECT_ENTRIES']=str(len(before)+(len(list(volume.iterdir()))+1 if args.updater else 0))
+            env['DND_SCAN_EXPECT_IMAGE_ENTRIES']=str(len(before))
+            if args.updater:env['DND_SCAN_EXPECT_SWISS_BYTES']=str(2097408+256+32)
             if args.automatic:env.pop('DND_ASYNC_MANUAL',None)
             if scenario=='native-memory-fault':env['DND_SCAN_NATIVE_MEMORY_FAULT']='1'
             else:env.pop('DND_SCAN_NATIVE_MEMORY_FAULT',None)
