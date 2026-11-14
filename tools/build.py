@@ -74,6 +74,12 @@ def main():
     if not marker.exists() or marker.read_text()!=actual:
         run('python3',sdk/'eng/pack.py','--version',lock['packageVersion'],'--output',feed,cwd=sdk)
         marker.write_text(actual)
+    if sys.platform.startswith('linux') and shutil.which('cc'):
+        # Execute the production scan and console through the exact SDK AOT
+        # runtime with the console's 1 MiB heap, not the desktop CLR allocator.
+        run('python3',ROOT/'tests/test_native_scan.py','--sdk-source',sdk,
+            '--output',ROOT/'out/native-scan-check','--ui','--automatic','--updater',
+            '--highest-created-first','--optimized')
     run('python3','-m','unittest','discover','-s','tests','-p','test_provision.py')
     run('dotnet','run','--project','tests/Updater.Tests.csproj','-c','Release')
     run('dotnet','build','AnimalTown.Updater.csproj','-c','Release','-p:DndBuildNative=false')

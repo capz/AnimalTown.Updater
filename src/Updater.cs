@@ -36,7 +36,7 @@ internal static class Updater
         await Task.Yield();token.ThrowIfCancellationRequested();
         if(!Storage.IsMounted(StorageDevice.GcLoader)&&!Storage.Mount(StorageDevice.GcLoader)){NativeResult="GC Loader mount returned false";throw new IOException("GC Loader SD is unavailable or not writable");}
         Operation="Find highest stable installation";Status="Searching GC Loader for stable AnimalTown images";
-        var selected=await StableImageDiscovery.ScanAsync("gcloader:/",token);
+        var selected=await StableImageDiscovery.ScanAsync("gcloader:/",token,static path=>CurrentPath=path);
         CurrentPath=selected.Path;Status="Selected "+selected.Version+" in "+selected.Directory;
         await Task.Yield();token.ThrowIfCancellationRequested();
         // Validate and stage the helper before spending an entropy seed or

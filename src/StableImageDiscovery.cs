@@ -63,25 +63,32 @@ internal static class StableImageDiscovery
         for(int i=0;i<length;i++){char x=Lower(a[i]),y=Lower(b[i]);if(x!=y)return x<y?-1:1;}
         return a.Length==b.Length?0:a.Length<b.Length?-1:1;
     }
-    internal static async Task<StableImage> ScanAsync(string root,CancellationToken token)
+    internal static async Task<StableImage> ScanAsync(string root,CancellationToken token,Action<string>? reportPath=null)
     {
         StableImage? best=null;int work=0,depth=0;
         // A top-directory cursor does not collect sibling paths. Bound active
         // native directory handles and keep one of the SDK's 32 slots available
         // to read an image header. Overflow aborts, never selects a partial scan.
         var cursors=new IEnumerator<string>?[31];
+        var directories=new string?[cursors.Length];directories[0]=root;
         token.ThrowIfCancellationRequested();
+        reportPath?.Invoke(root);
         cursors[0]=System.IO.Directory.EnumerateFileSystemEntries(root).GetEnumerator();
         try{
             while(depth>=0){
                 token.ThrowIfCancellationRequested();var cursor=cursors[depth]!;
-                if(!cursor.MoveNext()){cursor.Dispose();cursors[depth]=null;depth--;continue;}
+                // Native enumeration also inspects each entry. Keep the
+                // containing directory visible if that filesystem call fails.
+                reportPath?.Invoke(directories[depth]!);
+                if(!cursor.MoveNext()){cursor.Dispose();cursors[depth]=null;directories[depth]=null;depth--;continue;}
                 string path=cursor.Current;
+                reportPath?.Invoke(path);
                 if(++work>=32){work=0;await Task.Yield();}
                 if(IsStagingPath(path))continue;
                 if(System.IO.Directory.Exists(path)){
                     if(depth+1==cursors.Length)throw new IOException("GC Loader directory nesting exceeds the bounded scan depth; no image changed");
-                    cursors[++depth]=System.IO.Directory.EnumerateFileSystemEntries(path).GetEnumerator();continue;
+                    directories[++depth]=path;
+                    cursors[depth]=System.IO.Directory.EnumerateFileSystemEntries(path).GetEnumerator();continue;
                 }
                 if(!TryFileVersion(path,out string version))continue;
                 // Real read failures abort; bad/foreign headers are rejected.

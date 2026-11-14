@@ -185,8 +185,13 @@ try{
     Image("AnimalTown-997.0.0.iso","0.11.24");Image("AnimalTown-996.0.0.iso","996.0.0",length:16);
     Image(".animaltown-update/AnimalTown-1001.0.0.nkit.iso","1001.0.0");
     Image("nested/.animaltown-update/AnimalTown-1002.0.0.iso","1002.0.0");
-    var selected=await StableImageDiscovery.ScanAsync(volume,default);
+    bool reportedRoot=false,reportedCandidate=false;
+    string expected=Path.Combine(volume,"A/Forêt 🦊/AnimalTown-1.10.12.iso");
+    var selected=await StableImageDiscovery.ScanAsync(volume,default,path=>{
+        if(path==volume)reportedRoot=true;if(path==expected)reportedCandidate=true;
+    });
     Check(selected.Version=="1.10.12"&&selected.Path==Path.Combine(volume,"A/Forêt 🦊/AnimalTown-1.10.12.iso"),"recursive scan selects highest numeric stable image and validates its own identity");
+    Check(reportedRoot&&reportedCandidate,"scan reports the containing directory and candidate path for native failure diagnostics");
     Check(selected.DownloadPath(mainRelease.Name)==selected.Directory+mainRelease.Name&&selected.DownloadPath(mainRelease.Name).EndsWith("/"+mainRelease.Name),"download keeps the exact GitHub release filename in the selected image directory");
     foreach(string name in new[]{"../AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24+abcdef123456.nkit.iso","gcloader:/AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24.nkit.iso/other.iso"})
         Reject(()=>selected.DownloadPath(name),"published stable filename cannot escape the selected directory or introduce a debug build");
@@ -210,8 +215,9 @@ try{
     Check(interrupted&&File.Exists(selected.Path),"cancellation after a scan yield releases its enumeration and preserves installed data");
     Image("AnimalTown-20.0.0.iso","20.0.0");
     using(var locked=new FileStream(Path.Combine(volume,"AnimalTown-20.0.0.iso"),FileMode.Open,FileAccess.Read,FileShare.None)){
-        bool refused=false;try{await StableImageDiscovery.ScanAsync(volume,default);}catch(IOException){refused=true;}
+        string stoppedAt="";bool refused=false;try{await StableImageDiscovery.ScanAsync(volume,default,path=>stoppedAt=path);}catch(IOException){refused=true;}
         Check(refused,"unreadable candidates abort discovery rather than silently selecting a possibly older ISO");
+        Check(stoppedAt==Path.Combine(volume,"AnimalTown-20.0.0.iso"),"failed image-header read retains the actual candidate path");
     }
     Check(File.Exists(selected.Path),"discovery I/O failure preserves the previous selected installation");
 }finally{Directory.Delete(volume,true);}

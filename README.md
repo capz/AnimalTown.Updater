@@ -112,11 +112,11 @@ libogc2/devkitPPC toolchain used by DolphinDotNet. Then:
 python3 tools/build.py --backend Docker
 ```
 
-The build pins the SDK's verified physical image selection from
+The build pins the SDK's verified physical image selection and exFAT traversal fix from
 [PR #178](https://github.com/capz/DolphinDotNet/pull/178) by commit in
 `sdk.lock.json`, creates a local NuGet feed, runs the host tests and uses the
 SDK's native build pipeline. This avoids waiting for a published SDK package.
-The SDK pin is `178d6cdaa3c08134d2a22330659000592c9ff5b0`; the project-local
+The SDK pin is `2f8e81650a6d23f2053da0118495b93866efb14e`; the project-local
 launch-argument bridge preserves and reads the versioned request.
 An existing clean SDK checkout at that exact revision can be supplied
 with `--sdk-source /path/to/DolphinDotNet`. Outputs and checksums are under
@@ -142,6 +142,16 @@ BBA HTTPS throughput, Swiss autoload/ODE selection, media removal and power
 interruption need hardware acceptance. FAT directory
 renames are not guaranteed power-loss atomic. Never remove power/card during
 installation.
+
+The build also runs the production updater scan and console drawing code through
+the SDK's native AOT runtime with the actual 1 MiB managed heap. Wide directories,
+thousands of stable/development images and 30 nested directories must complete
+with bounded retained memory and closed file handles. The pinned SDK tests its
+real FAT32/exFAT driver separately: the original driver's 10-level exFAT path
+limit reported `OutOfMemoryException` without exhausting memory. Its replacement
+supports 64 levels and reports a path-depth error beyond that limit. Scan failures
+show the current directory or image path, and native exceptions retain their
+diagnostic text even when managed memory is exhausted.
 
 Publication and verified physical disc selection precede deletion, so a power
 cut can leave both complete images;
