@@ -78,10 +78,17 @@ internal static class Updater
             Operation="Prepare new image autoload";launch.SetArguments(SwissPath,"Autoload="+DiscLauncher.GetSwissImagePath(target));
             Operation="Revalidate selected installation";CurrentPath=selected.Path;
             if(ImageFiles.ReadVersion(selected.Path)!=selected.Version)throw new IOException("The selected installation changed during the update");
-            if(StableImageDiscovery.ComparePaths(selected.Path,target)!=0){
-                Phase=5;Operation="Delete selected old installation";Status="Installing the verified release";
-                InstallTransaction.DeleteSelected(new InstallFiles(),selected.Path,target);
-            }
+            Phase=5;Operation="Select and verify GC Loader image";CurrentPath=target;Status="Selecting and verifying the game disc";
+            await Task.Yield();token.ThrowIfCancellationRequested();
+            InstallTransaction.ActivateAndDeleteSelected(new InstallFiles(),selected.Path,target,path=>{
+                // This changes GC Loader's hardware map and compares physical
+                // DVD reads with the verified file. Never remount the raw
+                // volume afterwards: its startup routine resets the drive.
+                Storage.SelectGcLoaderDiscImage(path);
+                if(StableImageDiscovery.ComparePaths(selected.Path,path)!=0){
+                    Operation="Delete selected old installation";CurrentPath=selected.Path;Status="Finishing the verified installation";
+                }
+            });
             LaunchImage=target;Phase=6;Operation="Launch selected image through Swiss";CurrentPath=target;Status="Starting AnimalTown";
             var prepared=launch;launch=null;return prepared;
         }catch{

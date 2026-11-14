@@ -47,12 +47,19 @@ internal sealed class InstallFiles : IInstallFiles
 }
 internal static class InstallTransaction
 {
-    // New images are published under their release basename and verified first.
-    // No rename or marker is needed: a cut before this delete leaves both files,
-    // and a cut after it leaves the complete new installation discoverable.
-    internal static void DeleteSelected(IInstallFiles files,string selected,string published)
+    // Publish and verify the new file before selecting its physical GC Loader
+    // mapping. The activation callback must verify physical disc readback before
+    // returning. A failed selection never reaches deletion; a cut after deletion
+    // leaves the complete new installation under its published filename.
+    internal static void ActivateAndDeleteSelected(IInstallFiles files,string selected,string published,Action<string> activate)
     {
-        if(StableImageDiscovery.ComparePaths(selected,published)==0||!files.Exists(selected)||!files.Exists(published))throw new IOException("Verified new image must exist separately before deleting the selected installation");
+        if(activate==null)throw new ArgumentNullException(nameof(activate));
+        if(!files.Exists(selected)||!files.Exists(published))throw new IOException("Selected and verified images must exist before selecting the new disc");
+        activate(published);
+        // Even an already-current installation must become the active disc, but
+        // FAT case aliases identify the same file and must never delete it.
+        if(StableImageDiscovery.ComparePaths(selected,published)==0)return;
+        if(!files.Exists(selected)||!files.Exists(published))throw new IOException("Installation changed during disc selection; preserve both images");
         files.Delete(selected);
     }
     internal static void Recover(IInstallFiles files,string image)

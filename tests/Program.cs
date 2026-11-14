@@ -102,24 +102,41 @@ var cut=new FakeFiles();cut.Data[image+".bak"]="original";cut.Mark(image+".updat
 Check(cut.Data[image]=="original"&&cut.Data[download]=="new","power cut between renames restores original and retains download");
 var unknown=new FakeFiles();unknown.Data[image+".update"]="unknown";Reject(()=>InstallTransaction.Recover(unknown,image),"unknown marker preserved");
 var publishedFiles=new FakeFiles();publishedFiles.Data[image]="original";publishedFiles.Data[mainRelease.Name]="verified release";publishedFiles.Data["other.iso"]="unrelated";
-InstallTransaction.DeleteSelected(publishedFiles,image,mainRelease.Name);
+string activeImage="old mapping";
+InstallTransaction.ActivateAndDeleteSelected(publishedFiles,image,mainRelease.Name,path=>{
+    Check(path==mainRelease.Name&&publishedFiles.Exists(image)&&publishedFiles.Exists(path),"both complete files exist while the exact published image is selected");
+    publishedFiles.Events.Add("select:"+path);activeImage=path;publishedFiles.Events.Add("verified:"+path);
+});
+Check(activeImage==mainRelease.Name&&publishedFiles.Events.SequenceEqual(new[]{"select:"+mainRelease.Name,"verified:"+mainRelease.Name,"delete:"+image}),"physical selection and successful readback precede old-image deletion");
 Check(!publishedFiles.Exists(image)&&publishedFiles.Data[mainRelease.Name]=="verified release"&&publishedFiles.Data["other.iso"]=="unrelated","successful cleanup deletes only the selected old ISO and preserves the published filename");
 Check(!publishedFiles.Exists(image+".bak")&&!publishedFiles.Exists(image+".update"),"filename-preserving cleanup performs no original-name replacement or backup rename");
+foreach(bool changed in new[]{false,true}){
+    var failure=new FakeFiles();failure.Data[image]="original";failure.Data[mainRelease.Name]="verified release";string mapping=image;
+    Reject(()=>InstallTransaction.ActivateAndDeleteSelected(failure,image,mainRelease.Name,path=>{
+        if(changed)mapping=path;
+        throw new IOException(changed?"Physical readback failed after mapping":"Selection command failed");
+    }),"selection or physical-readback failures propagate");
+    Check(failure.Data[image]=="original"&&failure.Data[mainRelease.Name]=="verified release"&&failure.Events.Count==0,"failed activation never attempts deletion and preserves both complete images");
+    Check(mapping==(changed?mainRelease.Name:image),"failed activation may leave either drive mapping while retaining both files");
+}
 foreach(bool after in new[]{false,true}){
-    var failure=new FakeFiles{FailAt=1,FailAfter=after};failure.Data[image]="original";failure.Data[mainRelease.Name]="verified release";
-    Reject(()=>InstallTransaction.DeleteSelected(failure,image,mainRelease.Name),"old-file deletion failures propagate");
+    var failure=new FakeFiles{FailAt=1,FailAfter=after};failure.Data[image]="original";failure.Data[mainRelease.Name]="verified release";bool mapped=false;
+    Reject(()=>InstallTransaction.ActivateAndDeleteSelected(failure,image,mainRelease.Name,path=>{mapped=true;failure.Events.Add("verified:"+path);}),"old-file deletion failures propagate");
+    Check(mapped&&failure.Events.SequenceEqual(new[]{"verified:"+mainRelease.Name,"delete:"+image}),"deletion faults happen only after the new image is active and read back");
     Check(failure.Data[mainRelease.Name]=="verified release","deletion failure or interruption always retains the verified published ISO");
+    Check(failure.Exists(image)==!after,"deletion faults before and after the mutation have the expected old-file state");
 }
 foreach(string missing in new[]{image,mainRelease.Name}){
-    var failure=new FakeFiles();failure.Data[image]="original";failure.Data[mainRelease.Name]="verified release";failure.Data.Remove(missing);
-    Reject(()=>InstallTransaction.DeleteSelected(failure,image,mainRelease.Name),"cleanup requires both the selected and published images to exist");
-    Check(failure.Data.Count==1,"failed cleanup does not mutate an incomplete installation");
+    var failure=new FakeFiles();failure.Data[image]="original";failure.Data[mainRelease.Name]="verified release";failure.Data.Remove(missing);bool selected=false;
+    Reject(()=>InstallTransaction.ActivateAndDeleteSelected(failure,image,mainRelease.Name,path=>selected=true),"activation requires both the selected and published images to exist");
+    Check(!selected&&failure.Data.Count==1&&failure.Events.Count==0,"incomplete installation is neither selected nor mutated");
 }
-var sameImage=new FakeFiles();sameImage.Data[image]="verified";
-Reject(()=>InstallTransaction.DeleteSelected(sameImage,image,image),"already-current published ISO cannot be deleted as its own predecessor");
-Check(sameImage.Data[image]=="verified","same-path rejection preserves the current ISO");
+var sameImage=new FakeFiles();sameImage.Data[image]="verified";int sameSelections=0;
+InstallTransaction.ActivateAndDeleteSelected(sameImage,image,image,path=>{Check(path==image,"already-current selection keeps the exact target");sameSelections++;});
+Check(sameSelections==1&&sameImage.Data[image]=="verified"&&sameImage.Events.Count==0,"already-current image is selected once without deleting itself");
 var caseAlias=new FakeFiles();caseAlias.Data["AnimalTown-0.11.24.nkit.iso"]="verified";caseAlias.Data["animaltown-0.11.24.nkit.iso"]="same FAT name";
-Reject(()=>InstallTransaction.DeleteSelected(caseAlias,"AnimalTown-0.11.24.nkit.iso","animaltown-0.11.24.nkit.iso"),"FAT case aliases cannot delete the published ISO");
+string aliasSelected="";InstallTransaction.ActivateAndDeleteSelected(caseAlias,"AnimalTown-0.11.24.nkit.iso","animaltown-0.11.24.nkit.iso",path=>aliasSelected=path);
+Check(aliasSelected=="animaltown-0.11.24.nkit.iso"&&caseAlias.Data.Count==2&&caseAlias.Events.Count==0,"FAT case aliases select the target without deleting the published ISO");
 foreach(string target in new[]{"gcloader:/My Town.iso","gcloader:/Games/Animal Town/custom.nkit.iso","gcloader:/街/Forêt 🦊.gcm"})foreach(bool after in new[]{false,true})for(int failure=1;failure<=5;failure++){
     var request=LaunchRequest.Parse(Request(target));string staged=request.DownloadPath(mainRelease.Name);
     var files=new FakeFiles{FailAt=failure,FailAfter=after};files.Data[request.Image]="original";files.Data[request.Backup]="older";files.Data[staged]="new";files.Data["gcloader:/AnimalTown.iso"]="unrelated";
@@ -212,16 +229,16 @@ try{
     Check(refused&&File.Exists(installed),"unsupported directory depth fails explicitly without returning a partial highest-version result or deleting data");
 }finally{Directory.Delete(broad,true);}
 if(args.Length==1){string liveJson=File.ReadAllText(args[0]);var live=liveJson.TrimStart().StartsWith("{")?ReleaseInfo.ParseStable(liveJson):ReleaseInfo.Parse(liveJson);Check(live.Name.EndsWith(".nkit.iso"),"actual GitHub release metadata");Console.WriteLine("Live release parsed: "+live.Name);}
-Console.WriteLine(checks+" updater checks passed: stable discovery, published filenames, safe deletion, request paths, SHA-256 and interrupted installation.");
+Console.WriteLine(checks+" updater checks passed: stable discovery, published filenames, verified selection before deletion, request paths, SHA-256 and interrupted installation.");
 
 sealed class FakeFiles : IInstallFiles
 {
-    internal readonly Dictionary<string,string> Data=new();internal int FailAt,FailAgain;internal bool FailAfter;private int mutations;
+    internal readonly Dictionary<string,string> Data=new();internal readonly List<string> Events=new();internal int FailAt,FailAgain;internal bool FailAfter;private int mutations;
     private void Mutate(){mutations++;if(!FailAfter&&(mutations==FailAt||mutations==FailAgain))throw new IOException("Injected I/O failure");}
     private void After(){if(FailAfter&&(mutations==FailAt||mutations==FailAgain))throw new IOException("Injected post-mutation I/O failure");}
     public bool Exists(string p)=>Data.ContainsKey(p);
     public void Move(string a,string b){Mutate();if(!Data.ContainsKey(a)||Data.ContainsKey(b))throw new IOException();Data[b]=Data[a];Data.Remove(a);After();}
-    public void Delete(string p){Mutate();Data.Remove(p);After();}
+    public void Delete(string p){Events.Add("delete:"+p);Mutate();Data.Remove(p);After();}
     public void Mark(string p){Mutate();Data.Add(p,"ATUPDATE1");After();}
     public bool HasMarker(string p)=>Data[p]=="ATUPDATE1";
 }

@@ -4,8 +4,9 @@ Standalone GameCube updater written in C# with DolphinDotNet. The output is
 `animal-town-updater.dol`. AnimalTown's title menu launches this executable and
 passes its running build version. The updater discovers the highest stable
 AnimalTown image on GC Loader storage, downloads the new stable release beside
-it with the published filename, deletes the selected old image after verification,
-then exits into Swiss to autoload the downloaded ISO.
+it with the published filename, switches GC Loader to that file and verifies
+physical disc readback, then deletes the selected old image and exits into Swiss
+to autoload the downloaded ISO.
 
 The complete updater executable is copied into MEM1 before launch; its console
 uses the IPL font and has no disc assets. It explicitly unmounts `dvd:/` before
@@ -36,9 +37,16 @@ The ISO streams into checked contiguous storage with a fixed 16 KiB application
 buffer. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
 must match before deletion. The new ISO keeps GitHub's filename in the selected
 old image's directory; it is never renamed to the old filename. Contiguous-file
-publication and card readback complete before the selected old ISO is deleted.
+publication and card readback complete before GC Loader's hardware image mapping
+is changed. The SDK then reads the physical DVD interface and compares the whole
+boot header with the verified file. Only a successful map-and-readback permits
+deletion of the selected old ISO. An already-current installation is selected
+and verified in the same way without deleting it. Fragmented images cannot be
+selected by this updater; a newly downloaded image uses contiguous allocation.
 Other installations and development images are left alone. A failed download,
-verification, helper preparation or cancellation preserves the selected old ISO.
+verification, disc selection, helper preparation or cancellation preserves the
+selected old ISO. A failed selection can leave the drive mapping changed; both
+files remain available for manual recovery.
 
 ## SD card setup
 
@@ -61,9 +69,10 @@ fallback for discs assembled without it. Settings remain in the SD-root
 
 Install a Swiss DOL from an official Swiss release with the setup tool.
 The SDK stages and validates that executable before deleting an ISO, then passes
-`Autoload=gcldr:/.../<published filename>` to Swiss. Swiss performs image/ODE
-selection and the normal apploader boot. No replacement-game raw DOL is launched
-against the old disc mapping.
+`Autoload=gcldr:/.../<published filename>` to Swiss. The updater selects and
+verifies the new physical mapping before deleting the old image. Swiss performs
+its normal image/ODE setup and apploader boot after the handoff. No
+replacement-game raw DOL is launched against the old disc mapping.
 
 HTTPS requires explicit trusted CA roots, fresh private entropy and a correct
 clock. On a trusted computer, with the SD mounted, run:
@@ -103,12 +112,13 @@ libogc2/devkitPPC toolchain used by DolphinDotNet. Then:
 python3 tools/build.py --backend Docker
 ```
 
-The build pins the SDK changes from [PR #163](https://github.com/capz/DolphinDotNet/pull/163)
-and [PR #164](https://github.com/capz/DolphinDotNet/pull/164) by commit in `sdk.lock.json`, creates a local NuGet feed, runs the host tests and
-uses the SDK's native build pipeline. This avoids waiting for a published SDK
-package. The SDK pin remains `81d74a8a80e67ac7b4a0be3c269ea5506b8a9647`;
-the project-local launch-argument bridge preserves and reads the versioned
-request without upgrading that SDK revision. An existing clean SDK checkout at that exact revision can be supplied
+The build pins the SDK's verified physical image selection from
+[PR #178](https://github.com/capz/DolphinDotNet/pull/178) by commit in
+`sdk.lock.json`, creates a local NuGet feed, runs the host tests and uses the
+SDK's native build pipeline. This avoids waiting for a published SDK package.
+The SDK pin is `178d6cdaa3c08134d2a22330659000592c9ff5b0`; the project-local
+launch-argument bridge preserves and reads the versioned request.
+An existing clean SDK checkout at that exact revision can be supplied
 with `--sdk-source /path/to/DolphinDotNet`. Outputs and checksums are under
 `out/release`. Main-branch CI publishes the DOL/ELF, build manifest and hashes as a
 GitHub prerelease; PR CI retains review artifacts. No private provisioned files
@@ -124,15 +134,17 @@ dotnet run --project tests/Updater.Tests.csproj -c Release
 
 The automated checks cover SHA-256 padding/multiblock vectors, direct NKit release
 selection, exclusion of development builds, numeric version comparisons,
-directory scanning, asset identity and injected failures at install mutations,
-plus launch-path validation and protocol handoff.
+directory scanning, asset identity, selection-before-deletion ordering and
+injected selection/deletion failures, plus launch-path validation and protocol
+handoff.
 Native GameCube compilation is a separate build gate. Physical GC Loader writes,
 BBA HTTPS throughput, Swiss autoload/ODE selection, media removal and power
 interruption need hardware acceptance. FAT directory
 renames are not guaranteed power-loss atomic. Never remove power/card during
 installation.
 
-Publication precedes deletion, so a power cut can leave both complete images;
+Publication and verified physical disc selection precede deletion, so a power
+cut can leave both complete images;
 the next scan selects the highest valid stable version. A partial download is
 not an installed candidate. Existing valid new-image collisions are verified
 before reuse, and damaged collisions stop the update rather than overwriting
