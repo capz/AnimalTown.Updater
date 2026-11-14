@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "purpose": "Public Mozilla CA trust anchors embedded in the standalone updater; contains no entropy or secrets.",
+  "source": {
+    "repository": "certifi/python-certifi",
+    "revision": "ca446ca404ff3b962a0193f36e03d1eabb231968",
+    "url": "https://raw.githubusercontent.com/certifi/python-certifi/ca446ca404ff3b962a0193f36e03d1eabb231968/certifi/cacert.pem",
+    "bytes": 235863,
+    "sha256": "2ef52ad56b4803e264045c915e55c236cbfa045b84b81efefc218a19eb44bd2b",
+    "gitBlob": "7b1cc2d81b6a3ae341aeb34225a0bb03842c53c6"
+  },
+  "embedded": {
+    "transformation": "Certificate PEM blocks only, original base64 line wrapping, LF lines and a single LF separator. No certificates added or removed.",
+    "bytes": 178673,
+    "sha256": "737517c3f03de76442482d7d4fd5d81de60da1be75823d878adb08da3c0ef4fe",
+    "certificates": 118
+  },
+  "license": "MPL-2.0",
+  "licenseNotice": "LICENSE.certifi",
+  "licenseNoticeSha256": "5c98b7adfaa69f5565ef7d484d99da09febc4bb67692de9bc0ea605fc1b2d015"
+}

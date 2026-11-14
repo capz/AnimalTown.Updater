@@ -47,15 +47,18 @@ static void accepts(AtLaunchMemory *m,const uint8_t *packed,size_t length)
     CHECK(copy(m,ABI,sizeof(output))==(int)length);
     CHECK(!memcmp(output,packed,length));CHECK(output[length]==0xa5);
 }
-static const uint8_t ordinary[]="dvd:/Games/AnimalTown.nkit.iso\0--installed-image\0gcloader:/Games/AnimalTown.nkit.iso";
+static const uint8_t ordinary[]="dvd:/animal-town-updater.dol\0--animaltown-update=2\0" "0.11.36+012345abcdef";
 static void ordinary_fixture(void){fixture(ordinary,sizeof(ordinary),3);}
 
 int main(void)
 {
     AtLaunchMemory m=memory();
     ordinary_fixture();accepts(&m,ordinary,sizeof(ordinary));
-    /* Swiss image argv[0], an outgoing updater argv and standalone DOL argv
-     * are copied verbatim. Classification belongs to managed path policy. */
+    /* Both handoffs remain distinct argv elements: game -> updater (three),
+     * and updater -> Swiss (two), including spaces and UTF-8 path bytes. */
+    static const uint8_t autoload[]="gcloader:/animaltown-updater/swiss.dol\0Autoload=gcldr:/Games/Caf\xc3\xa9 \xe7\x8c\xab/AnimalTown-0.11.37.nkit.iso";
+    fixture(autoload,sizeof(autoload),2);accepts(&m,autoload,sizeof(autoload));
+    /* Swiss image argv[0] and standalone DOL argv remain legal too. */
     static const uint8_t swiss[]="dvd:/Games/My AnimalTown.nkit.iso";
     fixture(swiss,sizeof(swiss),1);accepts(&m,swiss,sizeof(swiss));
     static const uint8_t dol[]="carda:/apps/AnimalTown.dol";

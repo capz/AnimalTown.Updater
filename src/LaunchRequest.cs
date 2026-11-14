@@ -3,17 +3,20 @@ using System.IO;
 
 namespace AnimalTown.Updater;
 
-// A request identifies the image that launched the game. No guessed filename
-// or fallback target is safe when this process can replace files on the card.
+// v2 starts stable-image discovery. v1 remains readable for older games;
+// its path is legacy context and does not override the new selection policy.
 internal sealed class LaunchRequest
 {
     internal const string Protocol="--animaltown-update=1";
+    internal const string DiscoveryProtocol="--animaltown-update=2";
     internal readonly string Root="gcloader:/";
     internal readonly string Image,Version,Directory,Backup,Marker,DownloadDirectory;
 
     private LaunchRequest(string image,string version)
     {
-        Image=image;Version=version;int slash=image.Length-1;while(image[slash]!='/')slash--;Directory=image.Substring(0,slash+1);
+        Image=image;Version=version;
+        if(image.Length==0){Directory=Root;Backup=Marker="";DownloadDirectory=Root;return;}
+        int slash=image.Length-1;while(image[slash]!='/')slash--;Directory=image.Substring(0,slash+1);
         Backup=image+".bak";Marker=image+".update";
         // Keep the published basename without ever aliasing an installed ISO
         // that happens to have the same filename as the next release asset.
@@ -22,14 +25,21 @@ internal sealed class LaunchRequest
 
     internal static LaunchRequest Parse(string[] args)
     {
+        if(args!=null&&args.Length==3&&args[1]==DiscoveryProtocol){
+            ValidateLauncher(args[0]);ReleaseInfo.ParseVersion(args[2]);return new LaunchRequest("",args[2]);
+        }
         if(args==null||args.Length!=4||args[0]==null||args[0].Length==0||args[1]!=Protocol)
-            throw new IOException("Launch the updater from AnimalTown with its image path and version.");
+            throw new IOException("Launch the updater from AnimalTown with its running version.");
         // argv[0] identifies the updater DOL, which can be embedded on dvd: or
         // renamed on SD. It is never interpreted as the image to overwrite.
-        Utf8Length(args[0],900);
-        for(int i=0;i<args[0].Length;i++)if(args[0][i]<32||args[0][i]==127)throw new IOException("Invalid updater launch path.");
+        ValidateLauncher(args[0]);
         string image=args[2],version=args[3];ValidateImage(image);ReleaseInfo.ParseVersion(version);
         return new LaunchRequest(image,version);
+    }
+    private static void ValidateLauncher(string path)
+    {
+        if(path==null||path.Length==0)throw new IOException("Missing updater launch path");
+        Utf8Length(path,900);for(int i=0;i<path.Length;i++)if(path[i]<32||path[i]==127)throw new IOException("Invalid updater launch path.");
     }
 
     private static void ValidateImage(string image)
