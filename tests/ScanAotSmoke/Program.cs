@@ -57,6 +57,12 @@ internal static class Program
         var helper=swiss.GetAwaiter().GetResult();
         if(helper.Path!="gcloader:/swiss-streaming-fixture/renamed.DOL"||helper.Revision!=123)return 13;
         Console.WriteLine("Native Swiss discovery streamed a 2 MiB executable with the 1 MiB heap");
+        var unchanged=new UnchangedInstallFiles();
+        Action<string> mustNotRemap=static path=>throw new Exception("Already-current image must not reach physical selection");
+        InstallTransaction.ActivateAndDeleteSelected(unchanged,"gcloader:/AnimalTown-0.13.0.nkit.iso","gcloader:/AnimalTown-0.13.0.nkit.iso",mustNotRemap);
+        InstallTransaction.ActivateAndDeleteSelected(unchanged,"gcloader:/AnimalTown-0.13.0.nkit.iso","gcloader:/animaltown-0.13.0.nkit.iso",mustNotRemap);
+        if(unchanged.Checks!=4)return 14;
+        Console.WriteLine("Native already-current handoff: existence checked; physical remap and file mutation bypassed");
 #else
         var image=scan.GetAwaiter().GetResult();
         if(image.Version!="12.34.56"||image.Path!="gcloader:/AnimalTown-12.34.56.nkit.iso")return 11;
@@ -68,6 +74,15 @@ internal static class Program
 }
 
 #if SCAN_UPDATER
+internal sealed class UnchangedInstallFiles : IInstallFiles
+{
+    internal int Checks;
+    public bool Exists(string path){Checks++;return true;}
+    public void Move(string source,string target)=>throw new Exception("Unexpected move");
+    public void Delete(string path)=>throw new Exception("Unexpected delete");
+    public void Mark(string path)=>throw new Exception("Unexpected mark");
+    public bool HasMarker(string path)=>throw new Exception("Unexpected marker read");
+}
 namespace AnimalTown.Updater
 {
     internal static class NativeLaunchArguments

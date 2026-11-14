@@ -55,10 +55,11 @@ internal static class InstallTransaction
     {
         if(activate==null)throw new ArgumentNullException(nameof(activate));
         if(!files.Exists(selected)||!files.Exists(published))throw new IOException("Selected and verified images must exist before selecting the new disc");
-        activate(published);
-        // Even an already-current installation must become the active disc, but
-        // FAT case aliases identify the same file and must never delete it.
+        // No replacement means no destructive cleanup and no physical remap.
+        // Swiss handles the unchanged file's fragment map at normal autoload.
+        // This also covers FAT case aliases and installations ahead of the feed.
         if(StableImageDiscovery.ComparePaths(selected,published)==0)return;
+        activate(published);
         if(!files.Exists(selected)||!files.Exists(published))throw new IOException("Installation changed during disc selection; preserve both images");
         files.Delete(selected);
     }

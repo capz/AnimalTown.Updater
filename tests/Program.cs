@@ -148,11 +148,14 @@ foreach(string missing in new[]{image,mainRelease.Name}){
     Check(!selected&&failure.Data.Count==1&&failure.Events.Count==0,"incomplete installation is neither selected nor mutated");
 }
 var sameImage=new FakeFiles();sameImage.Data[image]="verified";int sameSelections=0;
-InstallTransaction.ActivateAndDeleteSelected(sameImage,image,image,path=>{Check(path==image,"already-current selection keeps the exact target");sameSelections++;});
-Check(sameSelections==1&&sameImage.Data[image]=="verified"&&sameImage.Events.Count==0,"already-current image is selected once without deleting itself");
+InstallTransaction.ActivateAndDeleteSelected(sameImage,image,image,path=>{sameSelections++;throw new NotSupportedException("Existing ISO may be fragmented");});
+Check(sameSelections==0&&sameImage.Data[image]=="verified"&&sameImage.Events.Count==0,"already-current image bypasses remapping and deletion; Swiss owns its fragment map");
 var caseAlias=new FakeFiles();caseAlias.Data["AnimalTown-0.11.24.nkit.iso"]="verified";caseAlias.Data["animaltown-0.11.24.nkit.iso"]="same FAT name";
 string aliasSelected="";InstallTransaction.ActivateAndDeleteSelected(caseAlias,"AnimalTown-0.11.24.nkit.iso","animaltown-0.11.24.nkit.iso",path=>aliasSelected=path);
-Check(aliasSelected=="animaltown-0.11.24.nkit.iso"&&caseAlias.Data.Count==2&&caseAlias.Events.Count==0,"FAT case aliases select the target without deleting the published ISO");
+Check(aliasSelected==""&&caseAlias.Data.Count==2&&caseAlias.Events.Count==0,"FAT case aliases bypass selection and deletion");
+var absentCurrent=new FakeFiles();bool absentSelected=false;
+Reject(()=>InstallTransaction.ActivateAndDeleteSelected(absentCurrent,image,image,path=>absentSelected=true),"already-current handoff still requires the image to exist");
+Check(!absentSelected&&absentCurrent.Events.Count==0,"missing current image cannot cause activation or mutation");
 foreach(string target in new[]{"gcloader:/My Town.iso","gcloader:/Games/Animal Town/custom.nkit.iso","gcloader:/街/Forêt 🦊.gcm"})foreach(bool after in new[]{false,true})for(int failure=1;failure<=5;failure++){
     var request=LaunchRequest.Parse(Request(target));string staged=request.DownloadPath(mainRelease.Name);
     var files=new FakeFiles{FailAt=failure,FailAfter=after};files.Data[request.Image]="original";files.Data[request.Backup]="older";files.Data[staged]="new";files.Data["gcloader:/AnimalTown.iso"]="unrelated";

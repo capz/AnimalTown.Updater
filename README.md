@@ -51,9 +51,12 @@ old image's directory; it is never renamed to the old filename. Contiguous-file
 publication and card readback complete before GC Loader's hardware image mapping
 is changed. The SDK then reads the physical DVD interface and compares the whole
 boot header with the verified file. Only a successful map-and-readback permits
-deletion of the selected old ISO. An already-current installation is selected
-and verified in the same way without deleting it. Fragmented images cannot be
-selected by this updater; a newly downloaded image uses contiguous allocation.
+deletion of the selected old ISO. When no newer release is needed, the selected
+image is revalidated and handed directly to Swiss without physical remapping or
+file deletion. This preserves Swiss's normal handling of manually copied,
+possibly fragmented images. New-version replacements still require successful
+physical selection/readback before deleting the old ISO; newly downloaded images
+use contiguous allocation. A failed replacement selection retains both files.
 Other installations and development images are left alone. A failed download,
 verification, disc selection, helper preparation or cancellation preserves the
 selected old ISO. A failed selection can leave the drive mapping changed; both
