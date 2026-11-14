@@ -8,6 +8,15 @@ internal sealed class ReleaseInfo
 {
     internal string Version="",Name="",Url="",Digest="";
     internal int Size;
+    internal const int MaximumFeedBytes=2048;
+    internal const string LatestFeedUrl="https://github.com/capz/AnimalTown/releases/latest/download/update.json";
+    internal static ReleaseInfo ParseUpdateFeed(string json)
+    {
+        if(json==null||json.Length>MaximumFeedBytes)throw new FormatException("Update feed exceeds 2 KiB limit");
+        var release=ParseStable(json);
+        if(release.Size>1459978240)throw new IOException("Update ISO exceeds GameCube disc size");
+        return release;
+    }
     internal static ReleaseInfo Parse(string json)=>ParseDocument(json,false);
     internal static ReleaseInfo ParseStable(string json)=>ParseDocument(json,true);
     private static ReleaseInfo ParseDocument(string json,bool stable)

@@ -26,13 +26,23 @@ ASCII-case-insensitive path ordering. The selected file is the installation
 to replace: GC Loader does not reveal which physical filename booted the game.
 The game does not require an `image-path.txt` mapping to start this updater.
 
-The download feed selects a published numeric-version
-[AnimalTown release](https://github.com/capz/AnimalTown/releases), with a direct
-`AnimalTown-<version>.nkit.iso` asset and GitHub SHA-256 digest. Hash-suffixed
-development releases are excluded. Numeric main builds remain eligible even
-while GitHub marks them as prereleases pending hardware acceptance. Metadata is
-read in bounded, paginated responses. An equal or newer installed stable version
-is kept.
+The updater reads
+[`releases/latest/download/update.json`](https://github.com/capz/AnimalTown/releases/latest/download/update.json),
+a maximum 2 KiB document published with the numbered main release. It contains
+only its tag and exact ISO basename, HTTPS URL, size and SHA-256. GitHub's latest
+regular release excludes hash-suffixed PR prereleases; the updater also validates
+the numeric tag and exact repository/tag/asset URL itself. An equal or newer
+installed numeric version is kept, including across the old patch numbering and
+new automatically incremented minor numbering (`0.11.38` to `0.12.0`).
+
+The former releases API scan buffered entire pages and parsed eligible releases
+twice. Its SDK string decoder also materialized skipped release notes; a 4,329-
+character note exceeded the 4,096-character string limit. The compact feed
+contains no notes, author objects or unrelated assets, is parsed once, and has
+a 2 KiB HTTP buffered-response cap before JSON decoding. There is no fallback to
+the large releases API. A missing, malformed or oversized feed fails before any
+download or image replacement. Requires an AnimalTown main release that publishes
+the compact feed (starting at `0.12.0`).
 
 The ISO streams into checked contiguous storage with a fixed 16 KiB application
 buffer. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
