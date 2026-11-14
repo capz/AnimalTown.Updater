@@ -1,0 +1,100 @@
+AnimalTown.Updater third-party notices
+
+Embedded Mozilla/certifi public CA certificates
+==============================================
+
+Upstream source: https://github.com/certifi/python-certifi
+Revision: ca446ca404ff3b962a0193f36e03d1eabb231968
+Source file:
+https://raw.githubusercontent.com/certifi/python-certifi/ca446ca404ff3b962a0193f36e03d1eabb231968/certifi/cacert.pem
+Source SHA-256:
+2ef52ad56b4803e264045c915e55c236cbfa045b84b81efefc218a19eb44bd2b
+
+The updater embeds the 118 public certificate PEM blocks from this source,
+with comments removed and LF separators normalized. No certificates are added
+or removed. The embedded data is 178,673 bytes, SHA-256:
+737517c3f03de76442482d7d4fd5d81de60da1be75823d878adb08da3c0ef4fe
+
+License: Mozilla Public License 2.0.
+Complete license terms: https://www.mozilla.org/MPL/2.0/
+The pinned source, provenance manifest and transformation are available in the
+updater source repository: https://github.com/capz/AnimalTown.Updater
+See assets/https/cacert.pem, assets/https/source.json and tools/generate-trust.py.
+
+The following upstream notice is retained verbatim:
+
+This package contains a modified version of ca-bundle.crt:
+
+ca-bundle.crt -- Bundle of CA Root Certificates
+
+This is a bundle of X.509 certificates of public Certificate Authorities
+(CA). These were automatically extracted from Mozilla's root certificates
+file (certdata.txt).  This file can be found in the mozilla source tree:
+https://hg.mozilla.org/mozilla-central/file/tip/security/nss/lib/ckfw/builtins/certdata.txt
+It contains the certificates in PEM format and therefore
+can be directly used with curl / libcurl / php_curl, or with
+an Apache+mod_ssl webserver for SSL client authentication.
+Just configure this file as the SSLCACertificateFile.#
+
+***** BEGIN LICENSE BLOCK *****
+This Source Code Form is subject to the terms of the Mozilla Public License,
+v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain
+one at http://mozilla.org/MPL/2.0/.
+
+***** END LICENSE BLOCK *****
+@(#) $RCSfile: certdata.txt,v $ $Revision: 1.80 $ $Date: 2011/11/03 15:11:58 $
+
+
+jitterentropy 3.7.0
+===================
+
+Upstream source: https://github.com/smuellerDD/jitterentropy-library
+Release: v3.7.0
+Revision: e783cf1c450bce4d72f95c9f9c84546a6094976a
+License choice: the BSD-style three-clause option reproduced below.
+
+DolphinDotNet supplies a bounded bare-metal port in place of the upstream
+operating-system timing and allocation hooks. Its jitterentropy-base.c change
+disables automatic collector startup recovery and fails on the first source
+health failure. The collector retains startup and continuous health checks.
+The modified source and port are distributed in DolphinDotNet:
+https://github.com/capz/DolphinDotNet/tree/main/source/jitterentropy
+See source/jitterentropy/UPSTREAM.md and source/dnd_jitterentropy_port.h.
+
+The following upstream copyright and license are retained verbatim:
+
+Copyright (C) 2017 - 2026, Stephan Mueller <smueller@chronox.de>
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, and the entire permission notice in its entirety,
+   including the disclaimer of warranties.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. The name of the author may not be used to endorse or promote
+   products derived from this software without specific prior
+   written permission.
+
+ALTERNATIVELY, this product may be distributed under the terms of
+the GNU General Public License, in which case the provisions of the GPL2
+are required INSTEAD OF the above restrictions.  (This clause is
+necessary due to a potential bad interaction between the GPL and
+the restrictions contained in a BSD-style copyright.)
+
+THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, ALL OF
+WHICH ARE HEREBY DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+USE OF THIS SOFTWARE, EVEN IF NOT ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.
+
+

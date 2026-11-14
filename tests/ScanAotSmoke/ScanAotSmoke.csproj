@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><Optimize>true</Optimize><ScanSdkSource Condition="'$(ScanSdkSource)' == ''">../../../DolphinDotNet</ScanSdkSource></PropertyGroup>
+  <PropertyGroup Condition="'$(ScanWithUi)' == 'true'"><DefineConstants>$(DefineConstants);SCAN_UI</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(ScanAutomatic)' == 'true'"><DefineConstants>$(DefineConstants);SCAN_AUTOMATIC</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(ScanUpdater)' == 'true'"><DefineConstants>$(DefineConstants);SCAN_UPDATER</DefineConstants></PropertyGroup>
+  <ItemGroup><ProjectReference Include="$(ScanSdkSource)/src/DolphinDotNet.Core/DolphinDotNet.Core.csproj" /></ItemGroup>
+  <ItemGroup Condition="'$(ScanWithUi)' == 'true'">
+    <ProjectReference Include="$(ScanSdkSource)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
+    <Compile Include="../../src/UpdaterConsole.cs" Link="UpdaterConsole.cs" />
+    <Compile Include="../../src/ConsoleText.cs" Link="ConsoleText.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(ScanUpdater)' == 'true'">
+    <Compile Include="../../src/Updater.cs" Link="Updater.cs" />
+    <Compile Include="../../src/UpdaterClock.cs" Link="UpdaterClock.cs" />
+    <Compile Include="../../src/EmbeddedTrust.cs" Link="EmbeddedTrust.cs" />
+    <Compile Include="../../src/LaunchRequest.cs" Link="LaunchRequest.cs" />
+    <ProjectReference Include="$(ScanSdkSource)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/StableImageDiscovery.cs" Link="StableImageDiscovery.cs" />
+    <Compile Include="../../src/ImageFiles.cs" Link="ImageFiles.cs" />
+    <Compile Include="../../src/ReleaseInfo.cs" Link="ReleaseInfo.cs" />
+    <Compile Include="../../src/Sha256.cs" Link="Sha256.cs" />
+    <Compile Include="../../src/SwissDiscovery.cs" Link="SwissDiscovery.cs" />
+    <Compile Include="../../src/SwissBuilds.cs" Link="SwissBuilds.cs" />
+  </ItemGroup>
+</Project>

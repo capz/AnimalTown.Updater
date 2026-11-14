@@ -11,7 +11,11 @@
 #include "../tools/native-launch-arguments.h"
 
 enum { BASE=0x80004000u, ABI=BASE+64u, COMMAND=BASE+256u, TABLE=BASE+4608u };
-static const uint8_t arguments[]="dvd:/animal-town-updater.dol\0--installed-image\0gcloader:/Games/My AnimalTown \xc3\xa9.nkit.iso";
+static const uint8_t game_arguments[]="dvd:/animal-town-updater.dol\0--animaltown-update=2\0" "0.11.36+012345abcdef";
+static const uint8_t swiss_arguments[]="gcloader:/animaltown-updater/swiss.dol\0Autoload=gcldr:/Games/Caf\xc3\xa9 \xe7\x8c\xab/AnimalTown-0.11.37.nkit.iso";
+static const uint8_t *arguments;
+static size_t argument_bytes;
+static unsigned expected_argc;
 static unsigned launches;
 static void word(uint8_t *p,uint32_t value)
 {p[0]=(uint8_t)(value>>24);p[1]=(uint8_t)(value>>16);p[2]=(uint8_t)(value>>8);p[3]=(uint8_t)value;}
@@ -26,9 +30,9 @@ void dnd_dol_platform_launch(DndDolPlan *plan,void *image,void *stub)
     assert(at_launch_u32(entry+4)==0x5f617267u);
     assert(at_launch_u32(entry+8)==0x5f617267u);
     assert(at_launch_u32(entry+12)==DND_DOL_ARGUMENTS_ADDRESS);
-    assert(at_launch_u32(entry+16)==sizeof(arguments));
+    assert(at_launch_u32(entry+16)==argument_bytes);
     assert(at_launch_u32(entry+20)==0&&at_launch_u32(entry+24)==0&&at_launch_u32(entry+28)==0);
-    assert(plan->arguments_size==sizeof(arguments)&&!memcmp(plan->arguments,arguments,sizeof(arguments)));
+    assert(plan->arguments_size==argument_bytes&&!memcmp(plan->arguments,arguments,argument_bytes));
     uint8_t memory[8192]={0},copied[4096]={0};
     uint8_t *abi=memory+(ABI-BASE);word(abi,0x5f617267u);
     word(abi+4,COMMAND);word(abi+8,plan->arguments_size);
@@ -41,10 +45,11 @@ void dnd_dol_platform_launch(DndDolPlan *plan,void *image,void *stub)
         while(cursor<plan->arguments_size&&plan->arguments[cursor])cursor++;
         cursor++;
     }
+    assert(argc==expected_argc);
     word(abi+12,argc);word(abi+16,TABLE);word(abi+20,TABLE+(argc+1)*4);
     AtLaunchMemory view={memory,BASE,sizeof(memory)};
-    assert(at_launch_arguments_copy(&view,ABI,copied,sizeof(copied))==(int)sizeof(arguments));
-    assert(!memcmp(copied,arguments,sizeof(arguments)));launches++;
+    assert(at_launch_arguments_copy(&view,ABI,copied,sizeof(copied))==(int)argument_bytes);
+    assert(!memcmp(copied,arguments,argument_bytes));launches++;
 }
 static DndArray *array(const uint8_t *source,size_t length)
 {
@@ -57,17 +62,26 @@ int main(void)
     word(image,256);word(image+0x48,0x80004000u);word(image+0x90,32);
     word(image+0xd8,0x80006000u);word(image+0xdc,128);word(image+0xe0,0x80004000u);
     word(image+260,0x5f617267u);
-    DndArray *dol=array(image,sizeof(image)),*args=array(arguments,sizeof(arguments));
-    int token=dnd_dol_prepare(dol);assert(token>0);
-    assert(dnd_dol_arguments(token,args)==0);
-    assert(dnd_dol_request(token)==0);assert(dnd_dol_pending());dnd_dol_finish(true);
-    assert(launches==1&&!dnd_dol_pending());
+    DndArray *dol=array(image,sizeof(image));
+    const struct {const uint8_t *bytes;size_t length;unsigned argc;} cases[]={
+        {game_arguments,sizeof(game_arguments),3},
+        {swiss_arguments,sizeof(swiss_arguments),2}
+    };
+    for(size_t i=0;i<sizeof(cases)/sizeof(cases[0]);i++){
+        arguments=cases[i].bytes;argument_bytes=cases[i].length;expected_argc=cases[i].argc;
+        DndArray *args=array(arguments,argument_bytes);
+        int token=dnd_dol_prepare(dol);assert(token>0);
+        assert(dnd_dol_arguments(token,args)==0);
+        assert(dnd_dol_request(token)==0);assert(dnd_dol_pending());dnd_dol_finish(true);
+        assert(launches==i+1&&!dnd_dol_pending());free(args);
+    }
+    DndArray *args=array(game_arguments,sizeof(game_arguments));int token;
     /* Unsupported CRTs fail before a handoff can silently lose image paths. */
     word(dol->data+260,0);token=dnd_dol_prepare(dol);assert(token>0);
     assert(dnd_dol_arguments(token,args)==-9);assert(dnd_dol_dispose(token)==0);
     word(dol->data+260,0x5f617267u);token=dnd_dol_prepare(dol);assert(token>0);
     args->data[0]=0;assert(dnd_dol_arguments(token,args)==-10);assert(dnd_dol_dispose(token)==0);
     free(args);free(dol);
-    puts("Launch argv handoff: real SDK DOL producer, _arg entry ABI and post-CRT bridge round trip passed");
+    puts("Launch argv handoff: game v2 and Swiss Autoload, real SDK producer, UTF-8 paths and CRT round trips passed");
     return 0;
 }

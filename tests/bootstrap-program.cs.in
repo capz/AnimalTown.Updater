@@ -1,0 +1,57 @@
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using AnimalTown.Updater;
+using Scheduler=Dolphin.Threading.Tasks.Scheduler;
+
+internal static class Program
+{
+    private static CancellationTokenSource? nativeCancellation;
+    public static void RequestCancellation()
+    {
+        if(nativeCancellation!=null)nativeCancellation.Cancel();
+    }
+    private static void Complete(Task task)
+    {
+        for(int i=0;i<1000000&&!task.IsCompleted;i++)Scheduler.Pump(16);
+        task.GetAwaiter().GetResult();
+    }
+    private static bool ClockFailure()
+    {
+        var task=Updater.ConfigureTls(CancellationToken.None);
+        try { Complete(task);return false; }
+        catch(IOException error) { return task.IsFaulted&&error.Message.Contains("clock"); }
+    }
+    public static int Main()
+    {
+        RequestCancellation();
+        using(var cancel=new CancellationTokenSource()) {
+            cancel.Cancel();var task=Updater.ConfigureTls(cancel.Token);
+            try { Complete(task);return 1; }
+            catch(OperationCanceledException) {}
+            if(!task.IsCanceled)return 2;
+        }
+        if(!ClockFailure()||Updater.Operation!="Check console clock")return 3;
+        Complete(Updater.ConfigureTls(CancellationToken.None));
+        if(Updater.Operation!="Initialize embedded HTTPS trust"||Updater.CurrentPath!="Embedded CA certificates")return 4;
+        var rejected=Updater.ConfigureTls(CancellationToken.None);
+        try { Complete(rejected);return 5; }
+        catch(IOException) { if(!rejected.IsFaulted)return 6; }
+        var sourceFailed=Updater.ConfigureTls(CancellationToken.None);
+        try { Complete(sourceFailed);return 7; }
+        catch(IOException) { if(!sourceFailed.IsFaulted)return 8; }
+        using(var cancel=new CancellationTokenSource()) {
+            nativeCancellation=cancel;
+            var task=Updater.ConfigureTls(cancel.Token);
+            try { Complete(task);return 9; }
+            catch(OperationCanceledException) {}
+            nativeCancellation=null;
+            if(!task.IsCanceled||!cancel.IsCancellationRequested)return 10;
+        }
+        if(!ClockFailure())return 11;
+        Complete(Updater.ConfigureTls(CancellationToken.None));
+        Console.WriteLine("Production ConfigureTls: embedded trust, fresh seed, clock re-read, failures and cancellation passed");
+        return 0;
+    }
+}
