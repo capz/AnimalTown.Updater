@@ -46,6 +46,13 @@ var reviewRelease=ReleaseInfo.Parse(json.Replace("0.14.9.abcdef123456","0.11.24+
 Check(mainRelease.Name=="AnimalTown-0.11.24.nkit.iso"&&reviewRelease.Name=="AnimalTown-0.11.24+abcdef123456.nkit.iso","current numeric and review release assets are selected by their exact identities");
 string stableJson=json.Trim()[1..^1].Replace("0.14.9.abcdef123456","0.11.24").Replace("\"prerelease\":true","\"prerelease\":false");
 var stable=ReleaseInfo.ParseStable(stableJson);
+var compact=ReleaseInfo.ParseUpdateFeed(stableJson.Replace("0.11.24","0.12.0"));
+Check(compact.Version=="0.12.0"&&ReleaseInfo.NeedsStableUpdate("0.11.38",compact.Version),"new minor release feed upgrades old patch-numbered installations");
+Reject(()=>ReleaseInfo.ParseUpdateFeed(new string(' ',2049)),"oversized metadata rejected before JSON allocation");
+Reject(()=>ReleaseInfo.ParseUpdateFeed(stableJson.Replace("\"draft\":false","\"draft\":true")),"compact feed rejects draft releases");
+Reject(()=>ReleaseInfo.ParseUpdateFeed(stableJson.Replace("0.11.24","0.12.0+abcdef123456")),"compact feed rejects preview builds");
+Reject(()=>ReleaseInfo.ParseUpdateFeed(stableJson.Replace("sha256:","sha512:")),"compact feed still requires SHA-256");
+Reject(()=>ReleaseInfo.ParseUpdateFeed(stableJson.Replace("https://github.com/capz/AnimalTown/","https://example.com/")),"compact feed still pins the exact download origin");
 Check(stable.Version=="0.11.24"&&stable.Name=="AnimalTown-0.11.24.nkit.iso","stable endpoint keeps the published release filename");
 Check(ReleaseInfo.NeedsStableUpdate("0.11.23","0.11.24")&&!ReleaseInfo.NeedsStableUpdate("0.11.24","0.11.24")&&!ReleaseInfo.NeedsStableUpdate("1.0.0","0.99.99"),"stable updates never downgrade the highest installed numeric version");
 Reject(()=>ReleaseInfo.ParseStable(stableJson.Replace("\"draft\":false","\"draft\":true")),"stable updater rejects drafts");
