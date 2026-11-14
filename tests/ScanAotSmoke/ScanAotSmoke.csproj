@@ -11,6 +11,8 @@
   </ItemGroup>
   <ItemGroup Condition="'$(ScanUpdater)' == 'true'">
     <Compile Include="../../src/Updater.cs" Link="Updater.cs" />
+    <Compile Include="../../src/UpdaterClock.cs" Link="UpdaterClock.cs" />
+    <Compile Include="../../src/EmbeddedTrust.cs" Link="EmbeddedTrust.cs" />
     <Compile Include="../../src/LaunchRequest.cs" Link="LaunchRequest.cs" />
     <ProjectReference Include="$(ScanSdkSource)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
   </ItemGroup>

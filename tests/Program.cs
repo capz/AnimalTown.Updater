@@ -1,10 +1,19 @@
 using System.Security.Cryptography;
 using System.Text;
 using AnimalTown.Updater;
+using Dolphin.Timing;
 
 int checks=0;
 void Check(bool value,string name){checks++;if(!value)throw new Exception(name);}
 void Reject(Action action,string name){bool rejected=false;try{action();}catch(Exception){rejected=true;}Check(rejected,name);}
+foreach(var date in new[]{new CalendarTime(2024,1,1,14,0),new CalendarTime(2024,2,29,23,59,59),new CalendarTime(2026,11,14,12,34,56),new CalendarTime(2038,1,18,13,14,7)}){
+    long expected=new DateTimeOffset(date.Year,date.Month,date.Day,date.Hour,date.Minute,date.Second,TimeSpan.Zero).ToUnixTimeSeconds();
+    Check(UpdaterClock.LocalUnixSeconds(date)==expected,"console local calendar is encoded exactly as the clock-window center");
+}
+foreach(var date in new[]{default(CalendarTime),new CalendarTime(2000,1,1,0,0),new CalendarTime(2023,12,31,23,59,59),new CalendarTime(2024,1,1,13,59,59),new CalendarTime(2038,1,18,13,14,8),new CalendarTime(2099,12,31,23,59,59)}){
+    bool rejected=false;try{UpdaterClock.LocalUnixSeconds(date);}catch(IOException error){rejected=error.Message.Contains("clock");}
+    Check(rejected,"invalid TLS clock window stops with an actionable console-clock error");
+}
 foreach(int size in new[]{0,1,3,55,56,63,64,65,127,128,1000,1000000}){
     var data=new byte[size];for(int i=0;i<size;i++)data[i]=(byte)(i%251);var sha=new Sha256();
     for(int at=0;at<size;at+=17)sha.Append(data,at,Math.Min(17,size-at));

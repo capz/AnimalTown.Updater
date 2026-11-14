@@ -8,8 +8,9 @@ it with the published filename, switches GC Loader to that file and verifies
 physical disc readback, then deletes the selected old image and exits into Swiss
 to autoload the downloaded ISO.
 
-The complete updater executable is copied into MEM1 before launch; its console
-uses the IPL font and has no disc assets. It explicitly unmounts `dvd:/` before
+The complete updater executable, including its public HTTPS trust anchors, is
+copied into MEM1 before launch; its console uses the IPL font and needs no disc
+assets after launch. It explicitly unmounts `dvd:/` before
 mounting the writable GC Loader card or changing an installation,
 and refuses to continue if the disc remains mounted. This preserves the source-
 disc release fix from [PR #2](https://github.com/capz/AnimalTown.Updater/pull/2).
@@ -56,16 +57,13 @@ image needs a stable versioned filename for discovery. For example:
 
 ```text
 /games/AnimalTown/AnimalTown-0.11.36.nkit.iso
-/animal-town-updater.dol
 /boot.dol
-/animaltown-updater/roots.pem
-/animaltown-updater/entropy.bin
-/animaltown-updater/utc-offset-minutes.txt
 ```
 
 The updater DOL is normally embedded in the game image; the SD-root DOL is a
-fallback for discs assembled without it. Settings remain in the SD-root
-`animaltown-updater/` folder even when the image is in a subfolder.
+fallback for discs assembled without it. No HTTPS configuration folder, seed
+file or PC provisioning is required. The public CA bundle is embedded in the
+updater itself, so unmounting or replacing the source ISO cannot remove it.
 
 Place a supported official normal Swiss DOL at the drive root. Its filename can
 stay `boot.dol`, `swiss_r2119.dol`, `SWISS.DOL` or another `.dol` name. The updater
@@ -89,37 +87,43 @@ verifies the new physical mapping before deleting the old image. Swiss performs
 its normal image/ODE setup and apploader boot after the handoff. No
 replacement-game raw DOL is launched against the old disc mapping.
 
-HTTPS requires explicit trusted CA roots, fresh private entropy and a correct
-clock. On a trusted computer, with the SD mounted, run:
+HTTPS uses 118 pinned Mozilla/certifi public CA roots, stored as 178,673 bytes
+in the DOL. The source revision, exact source and embedded SHA-256 digests, and
+MPL-2.0 notice are recorded in [assets/https/source.json](assets/https/source.json)
+and [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). Builds verify the bundle
+without importing the build computer's trust store or proxy certificates.
 
-```sh
-python3 tools/provision.py /path/to/SD --roots /path/to/ca-bundle.pem --utc-offset-minutes 60
-```
+Every HTTPS initialization obtains 48 fresh bytes with
+`PlatformEntropy.GetBytesAsync`. The SDK collects on the native service executor
+using its bounded jitterentropy provider, including startup and continuous source
+health checks. Failure, timeout or cancellation stops TLS initialization and
+clears temporary output; successful seed material is consumed and cleared by
+TLS configuration. No fixed seed is embedded, read from SD, reused between
+launches or published. Retrying an update collects fresh material automatically.
+Physical GameCube raw-source and restart qualification remains part of hardware
+acceptance: passing health checks or running in Dolphin does not establish the
+hardware source's entropy rate.
 
-Provisioning does not require installing or renaming Swiss. Optionally add
-`--swiss /path/to/swiss_r2119.dol` to verify and copy that supported official
-file to the SD root as `swiss.dol`. Existing root DOLs remain untouched when
-the option is omitted.
-The optional `--image` argument remains for older games that require a legacy
-mapping; the new updater ignores that mapping and discovers stable images.
+Set the GameCube calendar to the correct current local date and time. The
+console does not provide a reliable timezone, so the SDK treats the calendar as
+a possible UTC interval from 14 hours earlier to 14 hours later. Every
+certificate in the validated chain must remain valid across that entire interval;
+normal chain and hostname checks still apply. Both endpoints must fit the
+supported 2024–2038 time range. This strict check can reject a certificate near
+the beginning or end of its validity even when an exact UTC clock would accept
+it. There is no guessed timezone, trust in an HTTP Date header, certificate
+validation bypass or HTTP fallback.
+
+`tools/provision.py` is retained only for older updater releases that require
+SD-based HTTPS inputs. The current updater ignores its `roots.pem`,
+`entropy.bin`, `utc-offset-minutes.txt` and legacy `image-path.txt` files. To
+install Swiss for this updater, copy a supported normal official DOL to the drive
+root as described above; running the legacy provisioner is unnecessary.
 
 The game handoff contains three separate argv entries: updater DOL path,
 `--animaltown-update=2`, and running build version. Legacy v1 requests remain
 readable for compatibility. The updater's SD scan chooses the installation;
 the launch version does not select a filesystem path.
-
-Set the GameCube clock accurately. The offset is the console clock's offset from
-UTC (Amsterdam winter: 60, summer: 120); update it if the console clock or daylight
-saving offset changes. The script can use this PC's CA bundle and local UTC
-offset by default. Keep the supplied CA bundle within the SDK's 256 KiB limit.
-
-The script generates 48 secret bytes using the host OS CSPRNG. The updater deletes
-the seed before using it and clears its array; **each HTTPS attempt consumes one
-seed, including failures**. Re-provision before another attempt. Seeds are never
-built into the DOL or uploaded as artifacts. The SDK currently has no verified
-on-console entropy source, so unattended repeated updates require a future
-trusted entropy provider. There is no certificate-validation bypass or HTTP
-fallback. Keep the provisioned SD private and safely eject it.
 
 ## Build
 
@@ -130,17 +134,18 @@ libogc2/devkitPPC toolchain used by DolphinDotNet. Then:
 python3 tools/build.py --backend Docker
 ```
 
-The build pins the SDK's verified physical image selection and exFAT traversal fix from
-[PR #178](https://github.com/capz/DolphinDotNet/pull/178) by commit in
-`sdk.lock.json`, creates a local NuGet feed, runs the host tests and uses the
-SDK's native build pipeline. This avoids waiting for a published SDK package.
-The SDK pin is `2f8e81650a6d23f2053da0118495b93866efb14e`; the project-local
-launch-argument bridge preserves and reads the versioned request.
+The build pins the SDK revision in `sdk.lock.json`, including verified physical
+image selection, bounded FAT32/exFAT traversal and self-contained HTTPS support.
+It creates a local NuGet feed, checks generated public trust data, runs the host
+tests and uses the SDK's native build pipeline. This avoids waiting for a
+published SDK package. The project-local launch-argument bridge preserves and
+reads the versioned request.
 An existing clean SDK checkout at that exact revision can be supplied
 with `--sdk-source /path/to/DolphinDotNet`. Outputs and checksums are under
 `out/release`. Main-branch CI publishes the DOL/ELF, build manifest and hashes as a
-GitHub prerelease; PR CI retains review artifacts. No private provisioned files
-are included.
+GitHub prerelease; PR CI retains review artifacts. Public CA provenance and
+third-party notices accompany the release; private entropy is generated only at
+runtime.
 
 For host checks after preparing the local feed:
 
@@ -154,7 +159,10 @@ The automated checks cover SHA-256 padding/multiblock vectors, direct NKit relea
 selection, exclusion of development builds, numeric version comparisons,
 directory scanning, asset identity, selection-before-deletion ordering and
 injected selection/deletion failures, plus launch-path validation and protocol
-handoff.
+handoff. Trust checks verify all 118 roots and their fingerprints, reject stale
+generated data, and exercise the exact generated bytes through native AOT with
+the real 1 MiB managed heap and GC stress. The SDK checks local-clock certificate
+intervals, entropy-provider failure paths and secret-buffer clearing separately.
 Native GameCube compilation is a separate build gate. Physical GC Loader writes,
 BBA HTTPS throughput, Swiss autoload/ODE selection, media removal and power
 interruption need hardware acceptance. FAT directory

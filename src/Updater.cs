@@ -8,13 +8,13 @@ using HttpClient=Dolphin.Network.Http.HttpClient;
 using HttpCompletionOption=Dolphin.Network.Http.HttpCompletionOption;
 using Dolphin.Storage;
 using Dolphin.Timing;
+using Dolphin.Security;
 using File=System.IO.File;
 using Path=System.IO.Path;
 namespace AnimalTown.Updater;
 
 internal static class Updater
 {
-    internal const string Settings="gcloader:/animaltown-updater/";
     internal static string Operation="Read game launch request",CurrentPath="",NativeResult="";
     internal static string Status="Preparing updater";
     internal static int Phase;
@@ -38,8 +38,8 @@ internal static class Updater
         var selected=await StableImageDiscovery.ScanAsync("gcloader:/",token,static path=>CurrentPath=path);
         CurrentPath=selected.Path;Status="Selected "+selected.Version+" in "+selected.Directory;
         await Task.Yield();token.ThrowIfCancellationRequested();
-        // Validate and stage the helper before spending an entropy seed or
-        // downloading. Its native image stays resident through the handoff.
+        // Validate and stage the helper before configuring HTTPS or downloading.
+        // Its native image stays resident through the handoff.
         Operation="Prepare Swiss launch helper";CurrentPath="gcloader:/";Status="Finding Swiss on the GC Loader drive root";
         var swiss=await SwissDiscovery.FindAsync("gcloader:/",token,static path=>CurrentPath=path);
         string swissPath=swiss.Path;CurrentPath=swissPath;Status="Preparing Swiss r"+swiss.Revision;
@@ -49,7 +49,7 @@ internal static class Updater
             launch=await DolLauncher.PrepareAsync(swissPath,token);
             launch.SetArguments(swissPath,"Autoload="+firstTarget);
             Phase=1;Operation="Start Broadband Adapter";CurrentPath="";Status="Starting Broadband Adapter";
-            await NetworkRuntime.StartAsync(new NetworkOptions(),token);ConfigureTls();
+            await NetworkRuntime.StartAsync(new NetworkOptions(),token);await ConfigureTls(token);
             string target=selected.Path;
             using(var http=new HttpClient()){
                 http.MaximumResponseBytes=65536;http.MaximumStreamBytes=int.MaxValue;
@@ -130,19 +130,22 @@ internal static class Updater
         // then publishes the unmodified GitHub filename.
         Phase=4;Operation="Verify staged SD card bytes";CurrentPath=destination;Status="Verifying SD card write";await output.CompleteAsync(token);
     }
-    private static void ConfigureTls()
+    internal static async Task ConfigureTls(CancellationToken token)
     {
-        Operation="Read HTTPS trust and fresh entropy";CurrentPath=Settings;Status="Configuring HTTPS";
-        byte[] roots=File.ReadAllBytes(Settings+"roots.pem"),entropy=File.ReadAllBytes(Settings+"entropy.bin");
+        token.ThrowIfCancellationRequested();
+        Operation="Check console clock";CurrentPath="GameCube clock";Status="Checking console clock";
+        UpdaterClock.LocalUnixSeconds(SystemClock.Read());
+        Operation="Collect console entropy";CurrentPath="GameCube entropy provider";Status="Preparing secure connection";
+        byte[] entropy=await PlatformEntropy.GetBytesAsync(48,token);
+        byte[]? roots=null;
         try{
-            if(entropy.Length<48||entropy.Length>64)throw new IOException("Provision fresh updater entropy on a trusted host");
-            int offset=int.Parse(File.ReadAllText(Settings+"utc-offset-minutes.txt"));if(offset<-840||offset>840)throw new IOException("Invalid console UTC offset");
-            var clock=SystemClock.Read();int days=0;for(int year=2000;year<clock.Year;year++)days+=year%4==0?366:365;
-            for(int month=1;month<clock.Month;month++)days+=CalendarTime.DaysInMonth(clock.Year,month);
-            long utc=946684800L+(days+clock.Day-1)*86400L+clock.Hour*3600+clock.Minute*60+clock.Second-offset*60;
-            // Delete before use. A failed handshake still consumes this private
-            // one-shot seed; it is never embedded in a public release or reused.
-            File.Delete(Settings+"entropy.bin");TlsConfiguration.Initialize(roots,entropy,utc);
-        }finally{Array.Clear(entropy,0,entropy.Length);}
+            token.ThrowIfCancellationRequested();
+            Operation="Initialize embedded HTTPS trust";CurrentPath="Embedded CA certificates";Status="Configuring HTTPS";
+            roots=EmbeddedTrust.LoadRoots();
+            TlsConfiguration.InitializeFromLocalClock(roots,entropy,UpdaterClock.LocalUnixSeconds(SystemClock.Read()));
+        }finally{
+            Array.Clear(entropy,0,entropy.Length);
+            if(roots!=null)Array.Clear(roots,0,roots.Length);
+        }
     }
 }

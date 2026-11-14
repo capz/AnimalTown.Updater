@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Provision one-use HTTPS inputs and optionally install root-level Swiss."""
+"""Legacy provisioner for older updater releases using SD-based HTTPS inputs.
+
+The current updater embeds public CA roots, collects fresh platform entropy and
+validates its local clock without these files. No PC provisioning is needed.
+Install its supported normal Swiss DOL directly at the SD root instead.
+"""
 import argparse
 import datetime
 import os
@@ -170,8 +175,8 @@ def main(argv=None):
     parser.add_argument('sd_root',type=Path)
     parser.add_argument('--image', type=Path, help='optional legacy installation record for older AnimalTown builds; new builds discover stable ISOs automatically')
     parser.add_argument('--swiss', type=Path, help='optional official Swiss DOL to copy to the SD root as swiss.dol; the updater also discovers existing root DOLs by their contents')
-    parser.add_argument('--roots',type=Path,default=Path(ssl.get_default_verify_paths().cafile or 'roots.pem'))
-    parser.add_argument('--utc-offset-minutes',type=int,default=int(datetime.datetime.now().astimezone().utcoffset().total_seconds()//60),help='UTC offset of the correctly set GameCube local clock (default: this PC)')
+    parser.add_argument('--roots',type=Path,default=Path(ssl.get_default_verify_paths().cafile or 'roots.pem'),help='legacy updater PEM trust bundle; ignored by current updater releases')
+    parser.add_argument('--utc-offset-minutes',type=int,default=int(datetime.datetime.now().astimezone().utcoffset().total_seconds()//60),help='legacy updater offset of the correctly set GameCube local clock (default: this PC); current releases need no offset file')
     args=parser.parse_args(argv)
     try:
         root = args.sd_root.resolve(strict=True)
@@ -225,7 +230,7 @@ def main(argv=None):
             os.fsync(stream.fileno())
     except (OSError, ValueError, UnicodeError) as error:
         parser.error(str(error))
-    print('Provisioned HTTPS inputs for one updater launch. Keep this SD private; safely eject it.')
+    print('Provisioned HTTPS inputs for one legacy updater launch. Current updater releases ignore these files. Keep this SD private; safely eject it.')
     if image is None:
         print('Stable AnimalTown images will be discovered automatically; no image mapping is required.')
     else:

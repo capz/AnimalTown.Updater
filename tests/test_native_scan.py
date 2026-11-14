@@ -88,7 +88,7 @@ def main():
     runtime=['storage','contiguous_write','file_optimize','file_extents','verified_copy','timing',
              'async_runtime','stw','gc_stw','text','numeric','bcl']
     sources=[sdk/'source'/f'{name}.c' for name in runtime]
-    if args.updater:sources += [sdk/'source'/f'{name}.c' for name in ['network','network_posix','tls','dol','dol_gamecube']]
+    if args.updater:sources += [sdk/'source'/f'{name}.c' for name in ['network','network_posix','tls','platform_entropy','dol','dol_gamecube']]
     binary=work/'scan'
     flags=['cc','-std=c11','-O3' if args.optimized else '-O1','-D_DEFAULT_SOURCE','-D_DARWIN_C_SOURCE','-Wall','-Wextra',
            '-ffunction-sections','-fdata-sections','-I'+str(sdk/'include'),'-pthread']

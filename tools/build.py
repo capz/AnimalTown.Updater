@@ -58,6 +58,7 @@ def main():
     parser.add_argument('--sdk-source',type=Path,help='existing checkout of the locked SDK revision')
     parser.add_argument('--backend',choices=['Auto','Native','Docker'],default='Auto')
     options=parser.parse_args()
+    run('python3',ROOT/'tools/generate-trust.py','--check')
     lock=json.loads((ROOT/'sdk.lock.json').read_text())
     sdk=(options.sdk_source or ROOT/'out/sdk-source').resolve()
     if not (sdk/'.git').exists():
@@ -75,11 +76,17 @@ def main():
         run('python3',sdk/'eng/pack.py','--version',lock['packageVersion'],'--output',feed,cwd=sdk)
         marker.write_text(actual)
     if sys.platform.startswith('linux') and shutil.which('cc'):
+        run('python3',ROOT/'tests/test_trust.py','--native-aot','--sdk-source',sdk,
+            '--output',ROOT/'out/native-trust-check')
+        run('python3',ROOT/'tests/test_bootstrap.py','--sdk-source',sdk,
+            '--output',ROOT/'out/native-bootstrap-check')
         # Execute the production scan and console through the exact SDK AOT
         # runtime with the console's 1 MiB heap, not the desktop CLR allocator.
         run('python3',ROOT/'tests/test_native_scan.py','--sdk-source',sdk,
             '--output',ROOT/'out/native-scan-check','--ui','--automatic','--updater',
             '--highest-created-first','--optimized')
+    else:
+        run('python3',ROOT/'tests/test_trust.py')
     run('python3','-m','unittest','discover','-s','tests','-p','test_provision.py')
     run('dotnet','run','--project','tests/Updater.Tests.csproj','-c','Release')
     run('dotnet','build','AnimalTown.Updater.csproj','-c','Release','-p:DndBuildNative=false')
@@ -87,8 +94,9 @@ def main():
     output=ROOT/'out/release';output.mkdir(parents=True,exist_ok=True)
     for extension in ('dol','elf'):
         shutil.copy2(ROOT/f'bin/Release/net8.0/animal-town-updater.{extension}',output)
+    shutil.copy2(ROOT/'THIRD-PARTY-NOTICES.txt',output/'THIRD-PARTY-NOTICES.txt')
     (output/'build.json').write_text(json.dumps({'sdk':actual,'source':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'dirty':bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip())},indent=2)+'\n')
-    files=sorted(output.glob('animal-town-updater.*'))+[output/'build.json']
+    files=sorted(output.glob('animal-town-updater.*'))+[output/'build.json',output/'THIRD-PARTY-NOTICES.txt']
     (output/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in files))
     print(output/'animal-town-updater.dol')
 if __name__=='__main__':main()

@@ -29,7 +29,8 @@ internal static class Program
             string kind=error is OutOfMemoryException?"OutOfMemoryException":error is System.IO.FileNotFoundException?"FileNotFoundException":
                 error is System.IO.DirectoryNotFoundException?"DirectoryNotFoundException":error is UnauthorizedAccessException?"UnauthorizedAccessException":
                 error is System.IO.IOException?"IOException":error is FormatException?"FormatException":error is ArgumentException?"ArgumentException":
-                error is OperationCanceledException?"OperationCanceledException":error is InvalidOperationException?"InvalidOperationException":"Exception";
+                error is OperationCanceledException?"OperationCanceledException":error is TimeoutException?"TimeoutException":
+                error is InvalidOperationException?"InvalidOperationException":"Exception";
             string detail=kind+(string.IsNullOrEmpty(error.Message)?" (no native message)":"");
             if(Updater.NativeResult.Length>0)detail+="\n"+Updater.NativeResult;
             if(Updater.CurrentPath.Length>0)detail+="\n"+Updater.CurrentPath;
