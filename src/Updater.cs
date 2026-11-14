@@ -31,6 +31,9 @@ internal static class Updater
         Operation="Release source disc";CurrentPath="dvd:/";Status="Releasing the game disc";
         Storage.Unmount(StorageDevice.DvdDrive);
         if(Storage.IsMounted(StorageDevice.DvdDrive))throw new IOException("Could not release the updater's source disc");
+        // One process-wide scope covers updater-owned writable SD I/O. Reads
+        // remain read-only; downloads still require the strict contiguous writer.
+        using var allocationPolicy=Defrag.BeginScope(true,65536);
         Operation="Mount writable GC Loader volume";CurrentPath="gcloader:/";Status="Mounting GC Loader SD card";
         await Task.Yield();token.ThrowIfCancellationRequested();
         if(!Storage.IsMounted(StorageDevice.GcLoader)&&!Storage.Mount(StorageDevice.GcLoader)){NativeResult="GC Loader mount returned false";throw new IOException("GC Loader SD is unavailable or not writable");}

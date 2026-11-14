@@ -13,6 +13,8 @@ internal static class Program
         console.Draw("Searching GC Loader for stable AnimalTown images",true,false,0,0,0,"");
 #endif
 #if SCAN_UPDATER
+        Dolphin.IO.Defrag.OptIn(false);Dolphin.IO.Defrag.MinimumFileSize=131072;
+        VerifyAllocationScopes();
         var scan=Updater.Run(CancellationToken.None);
 #else
         if(!Storage.Mount(StorageDevice.GcLoader))return 10;
@@ -33,13 +35,14 @@ internal static class Program
         try{scan.GetAwaiter().GetResult();return 12;}
         catch(OutOfMemoryException error){
             if(error.Message!="Directory enumeration failed."||Updater.Phase!=0||Updater.Operation!="Find highest stable installation"||Updater.DownloadedBytes!=0||Updater.TotalBytes!=0||Updater.LaunchImage!="")throw;
-            Storage.Unmount(StorageDevice.GcLoader);
+            VerifyAllocationRestored();Storage.Unmount(StorageDevice.GcLoader);
             Console.WriteLine("Native enumeration ENOMEM retained before transfer");
             return 0;
         }
         catch(System.IO.IOException){
             if(Updater.Operation!="Prepare Swiss launch helper"||Updater.Status!="Finding Swiss on the GC Loader drive root")throw;
         }
+        VerifyAllocationRestored();
         // Test-only catalog and payload exercise a DOL larger than the entire
         // managed heap. Production root discovery cannot recognize this file.
         var swiss=SwissDiscovery.FindAsync("gcloader:/swiss-streaming-fixture",CancellationToken.None,null,
@@ -65,12 +68,30 @@ internal static class Program
         Console.WriteLine("Native already-current handoff: existence checked; physical remap and file mutation bypassed");
 #else
         var image=scan.GetAwaiter().GetResult();
-        if(image.Version!="12.34.56"||image.Path!="gcloader:/AnimalTown-12.34.56.nkit.iso")return 11;
+        if(image.Version!="12.34.56"||image.Path!="gcloader:/boot.GCM")return 11;
 #endif
         Storage.Unmount(StorageDevice.GcLoader);
         Console.WriteLine("Native scan selected the expected highest stable image");
         return 0;
     }
+#if SCAN_UPDATER
+    private static void VerifyAllocationRestored()
+    {
+        if(Dolphin.IO.Defrag.IsEnabled||Dolphin.IO.Defrag.MinimumFileSize!=131072)
+            throw new Exception("Updater allocation policy leaked past its scope");
+    }
+    private static void VerifyAllocationScopes()
+    {
+        using(Dolphin.IO.Defrag.BeginScope(true,65536)){
+            if(!Dolphin.IO.Defrag.IsEnabled||Dolphin.IO.Defrag.MinimumFileSize!=65536)throw new Exception("Allocation scope was not enabled");
+        }
+        VerifyAllocationRestored();
+        try{using(Dolphin.IO.Defrag.BeginScope(true,65536)){throw new System.IO.IOException("Test write failed");}}
+        catch(System.IO.IOException){}
+        VerifyAllocationRestored();
+        Console.WriteLine("Native automatic defrag scope: opt-in, threshold and success/failure restoration passed");
+    }
+#endif
 }
 
 #if SCAN_UPDATER

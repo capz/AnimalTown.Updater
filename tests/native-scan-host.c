@@ -34,12 +34,18 @@ DndString *dnd_scan_dir_next(DndManagedHeap *heap,int handle,int kind)
 }
 int dnd_scan_open(DndString *path,int mode,int access,int share)
 {
-    static const char suffix[]="/AnimalTown-12.34.56.nkit.iso";
+    static const char suffix[]="/boot.GCM";
     int handle=dnd_fs_open(path,mode,access,share);opens++;
     bool highest=path&&path->length>=sizeof(suffix)-1;
     for(size_t i=0;highest&&i<sizeof(suffix)-1;i++)
         if(path->chars[path->length-(sizeof(suffix)-1)+i]!=(unsigned char)suffix[i])highest=false;
-    if(highest){highest_handle=handle;highest_entry_index=entries;}
+    if(highest){
+        highest_handle=handle;highest_entry_index=entries;
+        if(getenv("DND_SCAN_EXPECT_AUTO_DEFRAG")){
+            assert(dnd_storage_auto_defrag_enabled());
+            assert(dnd_storage_auto_defrag_min_size()==65536);
+        }
+    }
     static const char probe[]="/swiss-streaming-fixture/renamed.DOL";
     bool swiss=path&&path->length>=sizeof(probe)-1;
     for(size_t i=0;swiss&&i<sizeof(probe)-1;i++)

@@ -23,7 +23,7 @@ def image(path,version):
 
 def fixture(root,scenario,width,highest_created_first=False):
     volume=root/'gcloader';volume.mkdir()
-    if highest_created_first:image(volume/'AnimalTown-12.34.56.nkit.iso','12.34.56')
+    if highest_created_first:image(volume/'boot.GCM','12.34.56')
     if scenario=='wide':
         for i in range(width):(volume/('unrelated-'+str(i).zfill(6)+'-'+'x'*80+'.iso')).touch()
     elif scenario=='candidates':
@@ -36,7 +36,9 @@ def fixture(root,scenario,width,highest_created_first=False):
             directory/=f'directory-{i}';directory.mkdir()
             for n in range(width):(directory/f'unrelated-{n:04}.txt').touch()
             image(directory/f'AnimalTown-0.{i}.0.nkit.iso',f'0.{i}.0')
-    if not highest_created_first:image(volume/'AnimalTown-12.34.56.nkit.iso','12.34.56')
+    image(volume/'renamed-preview.iso','99.0.0+abcdef123456')
+    image(volume/'.__dndcw_hidden.iso','999.0.0')
+    if not highest_created_first:image(volume/'boot.GCM','12.34.56')
     return volume
 
 def snapshot(volume):
@@ -113,6 +115,7 @@ def main():
             env['DND_SCAN_EXPECT_ENTRIES']=str(len(before)+(len(list(volume.iterdir()))+1 if args.updater else 0))
             env['DND_SCAN_EXPECT_IMAGE_ENTRIES']=str(len(before))
             if args.updater:env['DND_SCAN_EXPECT_SWISS_BYTES']=str(2097408+256+32)
+            if args.updater:env['DND_SCAN_EXPECT_AUTO_DEFRAG']='1'
             if args.automatic:env.pop('DND_ASYNC_MANUAL',None)
             if scenario=='native-memory-fault':env['DND_SCAN_NATIVE_MEMORY_FAULT']='1'
             else:env.pop('DND_SCAN_NATIVE_MEMORY_FAULT',None)
