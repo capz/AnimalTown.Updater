@@ -52,10 +52,9 @@ internal static class Updater
             await NetworkRuntime.StartAsync(new NetworkOptions(),token);await ConfigureTls(token);
             string target=selected.Path;
             using(var http=new HttpClient()){
-                http.MaximumResponseBytes=65536;http.MaximumStreamBytes=int.MaxValue;
-                http.DefaultRequestHeaders.Add("User-Agent","AnimalTown-Updater/2");http.DefaultRequestHeaders.Add("Accept","application/vnd.github+json");
-                http.DefaultRequestHeaders.Add("X-GitHub-Api-Version","2022-11-28");
-                Phase=2;Status="Checking published numeric releases";
+                http.MaximumResponseBytes=ReleaseInfo.MaximumFeedBytes;http.MaximumStreamBytes=int.MaxValue;
+                http.DefaultRequestHeaders.Add("User-Agent","AnimalTown-Updater/3");http.DefaultRequestHeaders.Add("Accept","*/*");
+                Phase=2;Status="Checking the latest numbered release";
                 var release=await ReadStableRelease(http,token);
                 if(ReleaseInfo.NeedsStableUpdate(selected.Version,release.Version)){
                     Artifact=release.Name;TotalBytes=release.Size;target=selected.DownloadPath(release.Name);
@@ -99,18 +98,11 @@ internal static class Updater
     }
     private static async Task<ReleaseInfo> ReadStableRelease(HttpClient http,CancellationToken token)
     {
-        int page=1;
-        while(true){
-            token.ThrowIfCancellationRequested();Operation="Read numeric release page "+page;
-            CurrentPath="https://api.github.com/repos/capz/AnimalTown/releases?per_page=1&page="+page;
-            using(var metadata=await http.GetAsync(CurrentPath,HttpCompletionOption.ResponseContentRead,token)){
-                metadata.EnsureSuccessStatusCode();var release=ReleaseInfo.ParseStablePage(await metadata.Content.ReadAsStringAsync(),out bool exhausted);
-                if(release!=null)return release;
-                if(exhausted)throw new IOException("No published numeric AnimalTown release was found");
-            }
-            if(page==int.MaxValue)throw new IOException("GitHub release pagination overflow");
-            page++;await Task.Yield();
-        }
+        token.ThrowIfCancellationRequested();Operation="Read compact stable update feed";
+        CurrentPath=ReleaseInfo.LatestFeedUrl;
+        using var metadata=await http.GetAsync(CurrentPath,HttpCompletionOption.ResponseContentRead,token);
+        metadata.EnsureSuccessStatusCode();
+        return ReleaseInfo.ParseUpdateFeed(await metadata.Content.ReadAsStringAsync());
     }
     private static async Task Download(HttpClient http,ReleaseInfo release,string destination,CancellationToken token)
     {

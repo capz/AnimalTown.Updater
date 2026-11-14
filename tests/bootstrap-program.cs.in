@@ -25,6 +25,7 @@ internal static class Program
     }
     public static int Main()
     {
+        VerifyCompactFeed();
         RequestCancellation();
         using(var cancel=new CancellationTokenSource()) {
             cancel.Cancel();var task=Updater.ConfigureTls(cancel.Token);
@@ -53,5 +54,17 @@ internal static class Program
         Complete(Updater.ConfigureTls(CancellationToken.None));
         Console.WriteLine("Production ConfigureTls: embedded trust, fresh seed, clock re-read, failures and cancellation passed");
         return 0;
+    }
+    private static void VerifyCompactFeed()
+    {
+        const string feed="{\"tag_name\":\"v0.12.0\",\"draft\":false,\"assets\":[{\"name\":\"AnimalTown-0.12.0.nkit.iso\",\"browser_download_url\":\"https://github.com/capz/AnimalTown/releases/download/v0.12.0/AnimalTown-0.12.0.nkit.iso\",\"size\":1280,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}]}";
+        for(int i=0;i<16;i++){
+            var release=ReleaseInfo.ParseUpdateFeed(feed);
+            if(release.Version!="0.12.0"||release.Size!=1280||!ReleaseInfo.NeedsStableUpdate("0.11.38",release.Version))throw new Exception("Compact numbered release feed");
+        }
+        bool rejected=false;
+        try{ReleaseInfo.ParseUpdateFeed(new string(' ',2049));}catch(FormatException){rejected=true;}
+        if(!rejected)throw new Exception("Unbounded metadata");
+        Console.WriteLine("Compact update feed: 16 parses and oversized input rejection passed with the 1 MiB heap");
     }
 }
