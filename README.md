@@ -30,6 +30,9 @@ rate-string formatting are needed.
 See [throughput limits, measured optimization and next experiments](docs/updater-throughput.md)
 for the BBA/EXI/TCP ceilings and reproducible native comparisons.
 
+See [sequential throughput changes](docs/sequential-throughput/README.md) for the
+enabled TCP window, SDK read size and SD batching checkpoints.
+
 ## Download scheduling
 
 The update workflow starts explicitly on the SDK background executor. Its
