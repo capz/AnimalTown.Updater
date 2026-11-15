@@ -6,19 +6,29 @@ namespace AnimalTown.Updater;
 
 internal static class ImageFiles
 {
+    internal const int HeaderSize=0x440;
     internal static string ReadVersion(string path)
     {
         if(!TryReadVersion(path,out string version))throw new IOException("Image is not a complete AnimalTown release");return version;
     }
-    internal static bool TryReadVersion(string path,out string version)
+    internal static bool TryReadVersion(string path,out string version)=>TryReadVersion(path,new byte[HeaderSize],out version);
+    // A volume scan reuses this buffer. Reject foreign discs after one small
+    // prefix read; valid images retain the existing fixed boot-header format.
+    internal static bool TryReadVersion(string path,byte[] header,out string version)
     {
+        if(header==null||header.Length<HeaderSize)throw new ArgumentException("Image header buffer is too small");
         version="";
-        using var input=File.OpenRead(path);var header=new byte[0x440];int used=0;
-        while(used<header.Length){int n=input.Read(header,used,header.Length-used);if(n==0)return false;used+=n;}
+        using var input=File.OpenRead(path);if(input.Length<HeaderSize)return false;
+        int used=0;
+        while(used<0x20){int n=input.Read(header,used,0x20-used);if(n==0)return false;used+=n;}
         if(header[0]!=65||header[1]!=77||header[2]!=84||header[3]!=69||header[4]!=48||header[5]!=49||header[0x1c]!=0xc2||header[0x1d]!=0x33||header[0x1e]!=0x9f||header[0x1f]!=0x3d)return false;
-        int end=0x20;while(end<0x420&&header[end]!=0)end++;var text=new char[end-0x20];for(int i=0;i<text.Length;i++)text[i]=(char)header[i+0x20];string title=new string(text);
-        const string prefix="AnimalTown / ";if(end==0x420||!title.StartsWith(prefix))return false;
-        version=title.Substring(prefix.Length);try{ReleaseInfo.ParseVersion(version);}catch(FormatException){version="";return false;}return true;
+        while(used<HeaderSize){int n=input.Read(header,used,HeaderSize-used);if(n==0)return false;used+=n;}
+        // NKit metadata begins at 0x200; release titles are contained before it.
+        int end=0x20;while(end<0x200&&header[end]!=0)end++;
+        const string prefix="AnimalTown / ";if(end==0x200||end<=0x20+prefix.Length)return false;
+        for(int i=0;i<prefix.Length;i++)if(header[0x20+i]!=prefix[i])return false;
+        var text=new char[end-0x20-prefix.Length];for(int i=0;i<text.Length;i++)text[i]=(char)header[i+0x20+prefix.Length];
+        version=new string(text);try{ReleaseInfo.ParseVersion(version);}catch(FormatException){version="";return false;}return true;
     }
     internal static async Task<string> HashAsync(string path,CancellationToken token)
     {
@@ -55,10 +65,11 @@ internal static class InstallTransaction
     {
         if(activate==null)throw new ArgumentNullException(nameof(activate));
         if(!files.Exists(selected)||!files.Exists(published))throw new IOException("Selected and verified images must exist before selecting the new disc");
-        activate(published);
-        // Even an already-current installation must become the active disc, but
-        // FAT case aliases identify the same file and must never delete it.
+        // No replacement means no destructive cleanup and no physical remap.
+        // Swiss handles the unchanged file's fragment map at normal autoload.
+        // This also covers FAT case aliases and installations ahead of the feed.
         if(StableImageDiscovery.ComparePaths(selected,published)==0)return;
+        activate(published);
         if(!files.Exists(selected)||!files.Exists(published))throw new IOException("Installation changed during disc selection; preserve both images");
         files.Delete(selected);
     }

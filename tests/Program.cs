@@ -148,11 +148,14 @@ foreach(string missing in new[]{image,mainRelease.Name}){
     Check(!selected&&failure.Data.Count==1&&failure.Events.Count==0,"incomplete installation is neither selected nor mutated");
 }
 var sameImage=new FakeFiles();sameImage.Data[image]="verified";int sameSelections=0;
-InstallTransaction.ActivateAndDeleteSelected(sameImage,image,image,path=>{Check(path==image,"already-current selection keeps the exact target");sameSelections++;});
-Check(sameSelections==1&&sameImage.Data[image]=="verified"&&sameImage.Events.Count==0,"already-current image is selected once without deleting itself");
+InstallTransaction.ActivateAndDeleteSelected(sameImage,image,image,path=>{sameSelections++;throw new NotSupportedException("Existing ISO may be fragmented");});
+Check(sameSelections==0&&sameImage.Data[image]=="verified"&&sameImage.Events.Count==0,"already-current image bypasses remapping and deletion; Swiss owns its fragment map");
 var caseAlias=new FakeFiles();caseAlias.Data["AnimalTown-0.11.24.nkit.iso"]="verified";caseAlias.Data["animaltown-0.11.24.nkit.iso"]="same FAT name";
 string aliasSelected="";InstallTransaction.ActivateAndDeleteSelected(caseAlias,"AnimalTown-0.11.24.nkit.iso","animaltown-0.11.24.nkit.iso",path=>aliasSelected=path);
-Check(aliasSelected=="animaltown-0.11.24.nkit.iso"&&caseAlias.Data.Count==2&&caseAlias.Events.Count==0,"FAT case aliases select the target without deleting the published ISO");
+Check(aliasSelected==""&&caseAlias.Data.Count==2&&caseAlias.Events.Count==0,"FAT case aliases bypass selection and deletion");
+var absentCurrent=new FakeFiles();bool absentSelected=false;
+Reject(()=>InstallTransaction.ActivateAndDeleteSelected(absentCurrent,image,image,path=>absentSelected=true),"already-current handoff still requires the image to exist");
+Check(!absentSelected&&absentCurrent.Events.Count==0,"missing current image cannot cause activation or mutation");
 foreach(string target in new[]{"gcloader:/My Town.iso","gcloader:/Games/Animal Town/custom.nkit.iso","gcloader:/街/Forêt 🦊.gcm"})foreach(bool after in new[]{false,true})for(int failure=1;failure<=5;failure++){
     var request=LaunchRequest.Parse(Request(target));string staged=request.DownloadPath(mainRelease.Name);
     var files=new FakeFiles{FailAt=failure,FailAfter=after};files.Data[request.Image]="original";files.Data[request.Backup]="older";files.Data[staged]="new";files.Data["gcloader:/AnimalTown.iso"]="unrelated";
@@ -171,6 +174,11 @@ try{
         Check(ImageFiles.ReadVersion(path)==version,"numeric and review identities are verified against the actual image header");
         var staleRequest=LaunchRequest.Parse(Request("gcloader:/Games/My Town.nkit.iso","0.11.23"));Reject(()=>staleRequest.VerifyInstalledVersion(ImageFiles.ReadVersion(path)),"changed header version is rejected using actual storage content");
     }
+    var reusableHeader=new byte[ImageFiles.HeaderSize];
+    Check(ImageFiles.TryReadVersion(path,reusableHeader,out var remembered)&&remembered=="0.11.24+abcdef123456","reusable header buffer reads the embedded identity");
+    Reject(()=>ImageFiles.TryReadVersion(path,new byte[16],out _),"undersized scan buffers are rejected before I/O");
+    Array.Fill(header,(byte)'X',0x20,0x200-0x20);File.WriteAllBytes(path,header);
+    Check(!ImageFiles.TryReadVersion(path,reusableHeader,out remembered)&&remembered=="","unterminated metadata cannot reuse a previous buffer's version");
     var content=new byte[196777];for(int i=0;i<content.Length;i++)content[i]=(byte)(i%251);File.WriteAllBytes(path,content);
     Check(await ImageFiles.HashAsync(path,default)==Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(),"yielding SD verification hashes multiple slices");
     using var cancelled=new CancellationTokenSource();cancelled.Cancel();bool interrupted=false;
@@ -195,18 +203,23 @@ void Image(string relative,string version,bool game=true,bool magic=true,int len
 try{
     Image("AnimalTown-0.99.99.iso","0.99.99");Image("A/AnimalTown-1.0.0.nkit.iso","1.0.0");
     Image("B/AnimalTown-1.9.99.iso","1.9.99");Image("B/AnimalTown-1.10.9.nkit.iso","1.10.9");
-    Image("A/Forêt 🦊/AnimalTown-1.10.12.iso","1.10.12");
+    Image("A/Forêt 🦊/boot.GCM","1.10.12");
     Image("AnimalTown-90.0.0+abcdef123456.nkit.iso","90.0.0+abcdef123456");Image("AnimalTown-90.0.0.abcdef123456.iso","90.0.0.abcdef123456");
     Image("AnimalTown-999.0.0.iso","999.0.0",game:false);Image("AnimalTown-998.0.0.iso","998.0.0",magic:false);
     Image("AnimalTown-997.0.0.iso","0.11.24");Image("AnimalTown-996.0.0.iso","996.0.0",length:16);
     Image(".animaltown-update/AnimalTown-1001.0.0.nkit.iso","1001.0.0");
     Image("nested/.animaltown-update/AnimalTown-1002.0.0.iso","1002.0.0");
+    Image(".__dndcw_12345678.iso","1003.0.0");
+    Image("nested/.__DND_opt/renamed.gcm","1004.0.0");
+    Image("renamed-preview.iso","1005.0.0+abcdef123456");
+    Image("copy.iso.bak","1006.0.0");Image("copy.iso.update","1007.0.0");
+    Image("Foreign.GCM","1008.0.0",game:false);Image("truncated.GCM","1009.0.0",length:128);
     bool reportedRoot=false,reportedCandidate=false;
-    string expected=Path.Combine(volume,"A/Forêt 🦊/AnimalTown-1.10.12.iso");
+    string expected=Path.Combine(volume,"A/Forêt 🦊/boot.GCM");
     var selected=await StableImageDiscovery.ScanAsync(volume,default,path=>{
         if(path==volume)reportedRoot=true;if(path==expected)reportedCandidate=true;
     });
-    Check(selected.Version=="1.10.12"&&selected.Path==Path.Combine(volume,"A/Forêt 🦊/AnimalTown-1.10.12.iso"),"recursive scan selects highest numeric stable image and validates its own identity");
+    Check(selected.Version=="1.10.12"&&selected.Path==expected,"embedded version selects a renamed GCM; filenames, previews, foreign/truncated images and staging cannot inflate selection");
     Check(reportedRoot&&reportedCandidate,"scan reports the containing directory and candidate path for native failure diagnostics");
     Check(selected.DownloadPath(mainRelease.Name)==selected.Directory+mainRelease.Name&&selected.DownloadPath(mainRelease.Name).EndsWith("/"+mainRelease.Name),"download keeps the exact GitHub release filename in the selected image directory");
     foreach(string name in new[]{"../AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24+abcdef123456.nkit.iso","gcloader:/AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24.nkit.iso/other.iso"})
@@ -214,6 +227,10 @@ try{
     Image("Z/AnimalTown-1.10.12.nkit.iso","1.10.12");
     var tied=await StableImageDiscovery.ScanAsync(volume,default);
     Check(tied.Path==selected.Path,"equal-version duplicates use the deterministic lowest ordinal path");
+    File.Move(selected.Path,Path.Combine(volume,"A/Forêt 🦊/holiday.nkit.iso"));
+    var renamed=await StableImageDiscovery.ScanAsync(volume,default);
+    Check(renamed.Version==selected.Version&&renamed.Path.EndsWith("/holiday.nkit.iso"),"renaming an installed NKit image preserves version selection and its real path");
+    File.Move(renamed.Path,selected.Path);
     Check(File.Exists(selected.Path)&&File.Exists(Path.Combine(volume,"AnimalTown-999.0.0.iso")),"discovery never deletes selected or rejected images");
     using var cancelled=new CancellationTokenSource();cancelled.Cancel();bool interrupted=false;
     try{await StableImageDiscovery.ScanAsync(volume,cancelled.Token);}catch(OperationCanceledException){interrupted=true;}
@@ -338,6 +355,10 @@ if(args.Length==2&&args[0]=="--swiss-directory"){
             Check(found.Path==target&&found.Revision==identity.Revision,"actual official Swiss normal DOL identified from its contents r"+identity.Revision);
         }
     }finally{Directory.Delete(officialVolume,true);}
+}else if(args.Length==2&&args[0]=="--scan"){
+    var live=await StableImageDiscovery.ScanAsync(args[1],default);
+    Check(ImageFiles.ReadVersion(live.Path)==live.Version,"actual renamed image discovery agrees with its embedded identity");
+    Console.WriteLine("Live image selected: "+live.Version+" / "+live.Path);
 }else if(args.Length==1){string liveJson=File.ReadAllText(args[0]);var live=liveJson.TrimStart().StartsWith("{")?ReleaseInfo.ParseStable(liveJson):ReleaseInfo.Parse(liveJson);Check(live.Name.EndsWith(".nkit.iso"),"actual GitHub release metadata");Console.WriteLine("Live release parsed: "+live.Name);}
 Console.WriteLine(checks+" updater checks passed: stable discovery, published filenames, verified selection before deletion, request paths, SHA-256 and interrupted installation.");
 

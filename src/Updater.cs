@@ -31,6 +31,9 @@ internal static class Updater
         Operation="Release source disc";CurrentPath="dvd:/";Status="Releasing the game disc";
         Storage.Unmount(StorageDevice.DvdDrive);
         if(Storage.IsMounted(StorageDevice.DvdDrive))throw new IOException("Could not release the updater's source disc");
+        // One process-wide scope covers updater-owned writable SD I/O. Reads
+        // remain read-only; downloads still require the strict contiguous writer.
+        using var allocationPolicy=Defrag.BeginScope(true,65536);
         Operation="Mount writable GC Loader volume";CurrentPath="gcloader:/";Status="Mounting GC Loader SD card";
         await Task.Yield();token.ThrowIfCancellationRequested();
         if(!Storage.IsMounted(StorageDevice.GcLoader)&&!Storage.Mount(StorageDevice.GcLoader)){NativeResult="GC Loader mount returned false";throw new IOException("GC Loader SD is unavailable or not writable");}
@@ -77,16 +80,18 @@ internal static class Updater
             Operation="Prepare new image autoload";launch.SetArguments(swissPath,"Autoload="+DiscLauncher.GetSwissImagePath(target));
             Operation="Revalidate selected installation";CurrentPath=selected.Path;
             if(ImageFiles.ReadVersion(selected.Path)!=selected.Version)throw new IOException("The selected installation changed during the update");
-            Phase=5;Operation="Select and verify GC Loader image";CurrentPath=target;Status="Selecting and verifying the game disc";
-            await Task.Yield();token.ThrowIfCancellationRequested();
+            bool replacing=StableImageDiscovery.ComparePaths(selected.Path,target)!=0;
+            if(replacing){
+                Phase=5;Operation="Select and verify GC Loader image";CurrentPath=target;Status="Selecting and verifying the game disc";
+                await Task.Yield();
+            }
+            token.ThrowIfCancellationRequested();
             InstallTransaction.ActivateAndDeleteSelected(new InstallFiles(),selected.Path,target,path=>{
                 // This changes GC Loader's hardware map and compares physical
                 // DVD reads with the verified file. Never remount the raw
                 // volume afterwards: its startup routine resets the drive.
                 Storage.SelectGcLoaderDiscImage(path);
-                if(StableImageDiscovery.ComparePaths(selected.Path,path)!=0){
-                    Operation="Delete selected old installation";CurrentPath=selected.Path;Status="Finishing the verified installation";
-                }
+                Operation="Delete selected old installation";CurrentPath=selected.Path;Status="Finishing the verified installation";
             });
             LaunchImage=target;Phase=6;Operation="Launch selected image through Swiss";CurrentPath=target;Status="Starting AnimalTown";
             var prepared=launch;launch=null;return prepared;

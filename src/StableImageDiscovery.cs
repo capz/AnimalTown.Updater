@@ -46,7 +46,9 @@ internal static class StableImageDiscovery
         const string component=".animaltown-update";
         int start=0;
         for(int i=0;i<=path.Length;i++)if(i==path.Length||path[i]=='/'){
-            if(i-start==component.Length&&SamePrefix(path.Substring(start,i-start),component))return true;
+            int length=i-start;
+            if(length==component.Length&&SamePrefix(path.Substring(start,length),component)||
+                length>=6&&SamePrefix(path.Substring(start,length),".__dnd"))return true;
             start=i+1;
         }
         return false;
@@ -66,6 +68,7 @@ internal static class StableImageDiscovery
     internal static async Task<StableImage> ScanAsync(string root,CancellationToken token,Action<string>? reportPath=null)
     {
         StableImage? best=null;int work=0,depth=0;
+        var header=new byte[ImageFiles.HeaderSize];
         // A top-directory cursor does not collect sibling paths. Bound active
         // native directory handles and keep one of the SDK's 32 slots available
         // to read an image header. Overflow aborts, never selects a partial scan.
@@ -90,9 +93,10 @@ internal static class StableImageDiscovery
                     directories[++depth]=path;
                     cursors[depth]=System.IO.Directory.EnumerateFileSystemEntries(path).GetEnumerator();continue;
                 }
-                if(!TryFileVersion(path,out string version))continue;
+                if(!SameSuffix(path,".iso")&&!SameSuffix(path,".gcm"))continue;
                 // Real read failures abort; bad/foreign headers are rejected.
-                if(!ImageFiles.TryReadVersion(path,out string actual)||actual!=version)continue;
+                if(!ImageFiles.TryReadVersion(path,header,out string version))continue;
+                try{ReleaseInfo.ParseStableVersion(version);}catch(FormatException){continue;}
                 if(best==null||CompareVersions(version,best.Version)>0||CompareVersions(version,best.Version)==0&&ComparePaths(path,best.Path)<0)
                     best=new StableImage(path,version);
             }
