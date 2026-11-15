@@ -1,0 +1,18 @@
+{
+  "stage": 2,
+  "sdk_commit": "811cdb4643726d1d5bd496a28dcb44171a07a180",
+  "tcp_window": 32768,
+  "http_read_quantum": 16384,
+  "payload_bytes": 65567,
+  "content_length_reads_before_after": [
+    17,
+    5
+  ],
+  "chunked_reads_before_after": [
+    21,
+    9
+  ],
+  "tests": "verified local TLS, Debug/Release AOT, GC stress, security/framing regressions passed; native DOL built",
+  "physical_throughput": "not measured",
+  "dol_sha256": "fa5a45bab05ac081d63bb356f42cc8ddaf2b6cde2fe9c3ad3fd7da4367d594e7"
+}

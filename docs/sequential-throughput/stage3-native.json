@@ -1,0 +1,19 @@
+{
+  "scope": "Native host SDK AOT; real batching/hash; synthetic stream/writer; no physical SD throughput",
+  "results": [
+    {
+      "arguments": [],
+      "stdout": "BATCH chunk=4096 reads=18 writes=5 bytes=65567\nBATCH chunk=5003 reads=15 writes=5 bytes=65567\nBATCH chunk=16384 reads=6 writes=5 bytes=65567\nTRANSFER passed heap=314640 collections=0 capacity=1048576\n",
+      "stderr": "",
+      "exit_code": 0
+    },
+    {
+      "arguments": [
+        "--gc-stress"
+      ],
+      "stdout": "BATCH chunk=4096 reads=18 writes=5 bytes=65567\nBATCH chunk=5003 reads=15 writes=5 bytes=65567\nBATCH chunk=16384 reads=6 writes=5 bytes=65567\nTRANSFER passed heap=66840 collections=236 capacity=1048576\n",
+      "stderr": "",
+      "exit_code": 0
+    }
+  ]
+}

@@ -54,7 +54,7 @@ internal static class Updater
             await NetworkRuntime.StartAsync(new NetworkOptions(),token);await ConfigureTls(token);
             string target=selected.Path;
             using(var http=new HttpClient()){
-                http.MaximumResponseBytes=ReleaseInfo.MaximumFeedBytes;http.MaximumStreamBytes=int.MaxValue;
+                http.MaximumResponseBytes=ReleaseInfo.MaximumFeedBytes;http.MaximumStreamBytes=int.MaxValue;http.StreamReadBufferSize=16384;
                 http.DefaultRequestHeaders.Add("User-Agent","AnimalTown-Updater/3");http.DefaultRequestHeaders.Add("Accept","*/*");
                 Phase=2;Status="Checking the latest numbered release";
                 var release=await ReadStableRelease(http,token);
@@ -115,13 +115,8 @@ internal static class Updater
         // GitHub metadata bounds the reservation. No ISO-sized managed allocation.
         using var body=await response.Content.ReadAsStreamAsync();
         using var output=Storage.CreateContiguousFile(destination,release.Size);
-        var hash=new Sha256();var buffer=new byte[16384];int total=0;
-        while(true){
-            int count=await body.ReadAsync(buffer,0,buffer.Length,token);if(count==0)break;
-            if(count>release.Size-total)throw new IOException("Download exceeds release length");
-            output.Write(buffer,0,count);hash.Append(buffer,0,count);total+=count;DownloadedBytes=total;
-        }
-        if(total!=release.Size||hash.Finish()!=release.Digest)throw new IOException("Incomplete or damaged release; original ISO preserved");
+        await DownloadTransfer.CopyAsync(body,block=>output.Write(block.Buffer,0,block.Count),release.Size,release.Digest,
+            static written=>DownloadedBytes=written,token);
         // Complete verifies the actual card bytes and contiguous cluster chain,
         // then publishes the unmodified GitHub filename.
         Phase=4;Operation="Verify staged SD card bytes";CurrentPath=destination;Status="Verifying SD card write";await output.CompleteAsync(token);

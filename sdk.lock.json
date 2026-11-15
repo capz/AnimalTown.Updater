@@ -1,1 +1,5 @@
-{"repository":"https://github.com/capz/DolphinDotNet.git","commit":"5e18a4708aaffef931f322ddd4efdb4dbe75d00e","packageVersion":"0.1.0-updater.8","pullRequest":"https://github.com/capz/DolphinDotNet/pull/181"}
+{
+  "repository": "https://github.com/capz/DolphinDotNet.git",
+  "commit": "811cdb4643726d1d5bd496a28dcb44171a07a180",
+  "packageVersion": "0.1.0-updater.10"
+}

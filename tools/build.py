@@ -14,7 +14,7 @@ IMAGE='ghcr.io/extremscorner/libogc2@sha256:13bb658d3f18903816617223f5d7c6f776d3
 def run(*args, cwd=ROOT):
     subprocess.run(list(map(str,args)), cwd=cwd, check=True)
 
-def build_native(backend):
+def build_native(backend,tcp_window=32768):
     # The pinned SDK's BuildDol target bundles and invokes make as one step,
     # without an extension hook. Bundle into project output, patch only that
     # generated copy, then run the same pinned Make toolchain and heap budget.
@@ -36,7 +36,7 @@ def build_native(backend):
             extra=[native/'source/dol.c'] if fixture=='launch-handoff' else []
             run('cc','-std=c11','-Wall','-Wextra','-Werror','-ffunction-sections','-fdata-sections','-I'+str(native/'include'),ROOT/f'tests/native-{fixture}.c',*extra,'-Wl,--gc-sections','-o',check)
             run(check)
-    arguments=['make','-j2','DND_MANAGED_HEAP_BYTES=1048576']
+    arguments=['make','-j2','DND_MANAGED_HEAP_BYTES=1048576',f'DND_BBA_TCP_WINDOW_BYTES={tcp_window}']
     if backend=='Auto':
         backend='Native' if os.name!='nt' and os.environ.get('DEVKITPRO') and os.environ.get('DEVKITPPC') and shutil.which('elf2dol') else 'Docker'
     if backend=='Native':run(*arguments,cwd=native)
@@ -57,6 +57,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sdk-source',type=Path,help='existing checkout of the locked SDK revision')
     parser.add_argument('--backend',choices=['Auto','Native','Docker'],default='Auto')
+    parser.add_argument('--tcp-window',type=int,choices=[0,16384,32768,65535],default=32768,help='BBA receive window; 0 keeps the installed legacy library')
     options=parser.parse_args()
     run('python3',ROOT/'tools/generate-trust.py','--check')
     lock=json.loads((ROOT/'sdk.lock.json').read_text())
@@ -82,6 +83,8 @@ def main():
             '--output',ROOT/'out/native-bootstrap-check')
         run('python3',ROOT/'tests/test_native_worker.py','--sdk-source',sdk,
             '--output',ROOT/'out/native-worker-check')
+        run('python3',ROOT/'tests/test_native_transfer.py','--sdk-source',sdk,
+            '--output',ROOT/'out/native-transfer-check')
         # Execute the production scan and console through the exact SDK AOT
         # runtime with the console's 1 MiB heap, not the desktop CLR allocator.
         run('python3',ROOT/'tests/test_native_scan.py','--sdk-source',sdk,
@@ -92,12 +95,12 @@ def main():
     run('python3','-m','unittest','discover','-s','tests','-p','test_provision.py')
     run('dotnet','run','--project','tests/Updater.Tests.csproj','-c','Release')
     run('dotnet','build','AnimalTown.Updater.csproj','-c','Release','-p:DndBuildNative=false')
-    build_native(options.backend)
+    build_native(options.backend,options.tcp_window)
     output=ROOT/'out/release';output.mkdir(parents=True,exist_ok=True)
     for extension in ('dol','elf'):
         shutil.copy2(ROOT/f'bin/Release/net8.0/animal-town-updater.{extension}',output)
     shutil.copy2(ROOT/'THIRD-PARTY-NOTICES.txt',output/'THIRD-PARTY-NOTICES.txt')
-    (output/'build.json').write_text(json.dumps({'sdk':actual,'source':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'dirty':bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip())},indent=2)+'\n')
+    (output/'build.json').write_text(json.dumps({'tcpWindowBytes':options.tcp_window or 2920,'sdk':actual,'source':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'dirty':bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip())},indent=2)+'\n')
     files=sorted(output.glob('animal-town-updater.*'))+[output/'build.json',output/'THIRD-PARTY-NOTICES.txt']
     (output/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in files))
     print(output/'animal-town-updater.dol')
