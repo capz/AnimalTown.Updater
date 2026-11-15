@@ -19,20 +19,27 @@ internal sealed class Sha256
     internal void Append(byte[] data,int offset,int count)
     {
         if(finished||offset<0||count<0||offset>data.Length-count)throw new ArgumentException("Invalid hash input");length+=count;
-        for(int i=0;i<count;i++){block[used++]=data[offset+i];if(used==64){Transform();used=0;}}
+        if(used>0){
+            int n=Math.Min(64-used,count);Array.Copy(data,offset,block,used,n);
+            used+=n;offset+=n;count-=n;
+            if(used==64){Transform(block,0);used=0;}
+        }
+        // Full blocks can be transformed in place; only a partial block needs copying.
+        while(count>=64){Transform(data,offset);offset+=64;count-=64;}
+        if(count>0){Array.Copy(data,offset,block,0,count);used=count;}
     }
     internal string Finish()
     {
         if(finished)throw new InvalidOperationException();finished=true;long bits=length*8;block[used++]=128;
-        if(used>56){while(used<64)block[used++]=0;Transform();used=0;}while(used<56)block[used++]=0;
-        for(int i=7;i>=0;i--)block[used++]=(byte)(bits>>(i*8));Transform();var output=new char[64];const string hex="0123456789abcdef";
+        if(used>56){while(used<64)block[used++]=0;Transform(block,0);used=0;}while(used<56)block[used++]=0;
+        for(int i=7;i>=0;i--)block[used++]=(byte)(bits>>(i*8));Transform(block,0);var output=new char[64];const string hex="0123456789abcdef";
         for(int i=0;i<32;i++){int value=(int)(h[i/4]>>(24-(i%4)*8))&255;output[i*2]=hex[value>>4];output[i*2+1]=hex[value&15];}return new string(output);
     }
     private static uint R(uint x,int n)=>(x>>n)|(x<<(32-n));
-    private void Transform()
+    private void Transform(byte[] source,int start)
     {
         unchecked{
-            for(int i=0;i<16;i++){int p=i*4;w[i]=(uint)block[p]<<24|(uint)block[p+1]<<16|(uint)block[p+2]<<8|block[p+3];}
+            for(int i=0;i<16;i++){int p=start+i*4;w[i]=(uint)source[p]<<24|(uint)source[p+1]<<16|(uint)source[p+2]<<8|source[p+3];}
             for(int i=16;i<64;i++){uint a=w[i-15],b=w[i-2];w[i]=w[i-16]+(R(a,7)^R(a,18)^(a>>3))+w[i-7]+(R(b,17)^R(b,19)^(b>>10));}
             uint a0=h[0],b0=h[1],c=h[2],d=h[3],e=h[4],f=h[5],g=h[6],hh=h[7];
             for(int i=0;i<64;i++){uint t1=hh+(R(e,6)^R(e,11)^R(e,25))+((e&f)^(~e&g))+K[i]+w[i],t2=(R(a0,2)^R(a0,13)^R(a0,22))+((a0&b0)^(a0&c)^(b0&c));hh=g;g=f;f=e;e=d+t1;d=c;c=b0;b0=a0;a0=t1+t2;}

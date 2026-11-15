@@ -1,0 +1,9 @@
+{
+  "toolchain_image": "ghcr.io/extremscorner/libogc2@sha256:13bb658d3f18903816617223f5d7c6f776d3db3ea806aae67f8d35a7a69d4c85",
+  "libbba_sha256": "44c4da74ff13090bc6a941f43c5c31b61fefe154a4b0d465cbd9e4773b1c8547",
+  "tcp_alloc_receive_window": 2920,
+  "tcp_alloc_mss": 1460,
+  "source_reference_repository": "https://github.com/extremscorner/libogc2",
+  "source_reference_commit": "8b8113b4fc173cfe751d8f9c13ab91081abf2ae8",
+  "source_reference_matches_whole_binary": false
+}
