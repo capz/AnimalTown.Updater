@@ -1,0 +1,28 @@
+{
+  "scope": "Host filesystem + real pinned checked writer, including fsync; not SD or HTTP throughput",
+  "bytes_per_sample": 33554432,
+  "samples_us": {
+    "Write4096": [
+      113936,
+      99035,
+      91319,
+      92991,
+      104954,
+      98410,
+      89840,
+      113443,
+      95454
+    ],
+    "Write16384": [
+      157850,
+      83619,
+      92884,
+      87747,
+      82590,
+      95260,
+      102880,
+      103313,
+      81699
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "baseline_commit": "c03ea7d8bf1073e89497dc4c1db29328164875a0",
+  "sdk_commit": "5e18a4708aaffef931f322ddd4efdb4dbe75d00e",
+  "candidate_sha256": "df875c8c8c4cf97a394b4ec8a1e6741cffed89440ac72b90c53b023fd1193d69",
+  "bytes_per_sample": 262144,
+  "pairs": 5,
+  "digest": "39ffb3ccff2e919629dce169aaece19cf2cde9a2eadeaf0a0215c6e9da45aa7c",
+  "compiler_flags": [
+    "-O3",
+    "-flto",
+    "-g",
+    "-fno-strict-aliasing",
+    "-ffunction-sections",
+    "-fdata-sections"
+  ],
+  "scope": "Host native AOT SHA CPU phase; not GameCube throughput",
+  "samples_us": {
+    "Before": [
+      3741,
+      5346,
+      4101,
+      4208,
+      3469
+    ],
+    "After": [
+      10324,
+      6910,
+      2713,
+      2915,
+      2954
+    ]
+  }
+}
