@@ -11,6 +11,7 @@
     <Compile Include="../../src/DownloadSpeed.cs" Link="DownloadSpeed.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(ScanUpdater)' == 'true'">
+    <Compile Include="../../src/DownloadTransfer.cs" Link="DownloadTransfer.cs" />
     <Compile Include="../../src/Updater.cs" Link="Updater.cs" />
     <Compile Include="../../src/SwissLaunch.cs" Link="SwissLaunch.cs" />
     <Compile Include="../../src/UpdateWorker.cs" Link="UpdateWorker.cs" />

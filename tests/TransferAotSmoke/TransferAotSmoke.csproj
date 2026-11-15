@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><Optimize>true</Optimize></PropertyGroup>
+  <ItemGroup><ProjectReference Include="$(TransferSdkSource)/src/DolphinDotNet.Core/DolphinDotNet.Core.csproj" /></ItemGroup>
+  <ItemGroup><Compile Include="../../src/DownloadTransfer.cs" Link="DownloadTransfer.cs" /><Compile Include="../../src/Sha256.cs" Link="Sha256.cs" /></ItemGroup>
+</Project>

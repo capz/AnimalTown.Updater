@@ -49,6 +49,31 @@ foreach(int stride in new[]{1,17,63,64,65,127,4096,16384}){
 var completedHash=new Sha256();completedHash.Finish();
 Reject(()=>completedHash.Append(new byte[64],0,64),"finished hash rejects more input");
 Reject(()=>completedHash.Finish(),"hash finalization remains single use");
+// Stream boundaries must not affect byte order, digest or write size.
+foreach(int size in new[]{0,1,16383,16384,16385,32779,65567}){
+    byte[] source=Enumerable.Range(0,size).Select(i=>(byte)(i%251)).ToArray();
+    string digest=Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant();
+    foreach(int shortRead in new[]{1,4096,16384}){
+        using var body=new TransferStream(source,shortRead);using var destination=new MemoryStream();
+        var sizes=new List<int>();var progress=new List<int>();
+        await DownloadTransfer.CopyAsync(body,block=>{sizes.Add(block.Count);destination.Write(block.Buffer,0,block.Count);},size,digest,progress.Add,default);
+        Check(destination.ToArray().SequenceEqual(source),"batched download retains exact byte order "+size+"/"+shortRead);
+        Check(sizes.Count==(size+16383)/16384&&sizes.Take(Math.Max(0,sizes.Count-1)).All(n=>n==16384),"short reads coalesce to full SD batches and one tail");
+        Check((size==0?progress.Count==0:progress.Last()==size)&&progress.SequenceEqual(progress.Order()),"progress counts only successful output bytes");
+        Check(body.SmallRequestCount==0,"coalescing preserves full-size SDK read requests");
+    }
+}
+foreach(string failure in new[]{"truncated","overlong","digest","read","write","cancel"}){
+    var source=new byte[32779];string digest=Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant();
+    using var stop=new CancellationTokenSource();using var body=new TransferStream(source,4096);
+    int expected=source.Length,writes=0,progress=0;bool rejected=false;
+    if(failure=="truncated")expected++;if(failure=="overlong")expected--;if(failure=="digest")digest=new string('f',64);
+    if(failure=="read")body.FailAt=8192;if(failure=="cancel")body.CancelAfterRead=stop;
+    try{await DownloadTransfer.CopyAsync(body,block=>{if(failure=="write")throw new IOException("injected");writes++;},expected,digest,n=>progress=n,stop.Token);}
+    catch(Exception error){rejected=failure=="cancel"?error is OperationCanceledException:error is IOException;}
+    Check(rejected,"batched transfer propagates "+failure+" before publication");
+    if(failure=="write"||failure=="cancel")Check(progress==0,"failed or cancelled writes do not advance progress");
+}
 Check(Enumerable.Range(0,7).Select(ConsoleText.Dots).SequenceEqual(new[]{0,1,3,7,6,4,0}),"dots appear and disappear left to right");
 Check(ConsoleText.Transfer(1572864,10485760)=="1.5 MiB / 10.0 MiB","binary MiB progress units");
 Check(ConsoleText.Percent(999,1000)==99&&ConsoleText.Percent(1200,1000)==100&&ConsoleText.Percent(-1,1000)==0,"bounded exact download percentage");
@@ -410,4 +435,25 @@ sealed class DeferredContext : SynchronizationContext
     internal int Pending=>callbacks.Count;
     public override void Post(SendOrPostCallback callback,object? state)=>callbacks.Enqueue((callback,state));
     internal void Drain(){while(callbacks.Count>0){var next=callbacks.Dequeue();next.Callback(next.State);}}
+}
+
+sealed class TransferStream : Dolphin.IO.Stream
+{
+    readonly byte[] bytes;readonly int shortRead;int position;
+    public int FailAt=int.MaxValue,SmallRequestCount;
+    public CancellationTokenSource? CancelAfterRead;
+    public TransferStream(byte[] data,int limit){bytes=data;shortRead=limit;}
+    public override bool CanRead=>true;public override bool CanWrite=>false;public override bool CanSeek=>false;
+    public override long Length=>bytes.Length;
+    public override long Position{get=>position;set=>throw new NotSupportedException();}
+    public override Task<int> ReadAsync(byte[] buffer,int offset,int count,CancellationToken token){
+        token.ThrowIfCancellationRequested();if(count!=16384)SmallRequestCount++;
+        if(position>=FailAt)throw new IOException("injected read failure");
+        int n=Math.Min(Math.Min(count,shortRead),bytes.Length-position);Array.Copy(bytes,position,buffer,offset,n);position+=n;
+        CancelAfterRead?.Cancel();return Task.FromResult(n);
+    }
+    public override int Read(byte[] b,int o,int n)=>throw new NotSupportedException();
+    public override void Write(byte[] b,int o,int n)=>throw new NotSupportedException();
+    public override long Seek(long n,SeekOrigin o)=>throw new NotSupportedException();
+    public override void SetLength(long n)=>throw new NotSupportedException();public override void Flush(){}
 }

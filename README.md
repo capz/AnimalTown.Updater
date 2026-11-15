@@ -105,8 +105,7 @@ the large releases API. A missing, malformed or oversized feed fails before any
 download or image replacement. Requires an AnimalTown main release that publishes
 the compact feed (starting at `0.12.0`).
 
-The ISO streams into checked contiguous storage with a fixed 16 KiB application
-buffer. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
+The ISO streams into checked contiguous storage with a fixed 32 KiB coalescing workspace and 16 KiB reads/writes. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
 must match before deletion. The new ISO keeps GitHub's filename in the selected
 old image's directory; it is never renamed to the old filename. Contiguous-file
 publication and card readback complete before GC Loader's hardware image mapping

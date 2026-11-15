@@ -83,6 +83,8 @@ def main():
             '--output',ROOT/'out/native-bootstrap-check')
         run('python3',ROOT/'tests/test_native_worker.py','--sdk-source',sdk,
             '--output',ROOT/'out/native-worker-check')
+        run('python3',ROOT/'tests/test_native_transfer.py','--sdk-source',sdk,
+            '--output',ROOT/'out/native-transfer-check')
         # Execute the production scan and console through the exact SDK AOT
         # runtime with the console's 1 MiB heap, not the desktop CLR allocator.
         run('python3',ROOT/'tests/test_native_scan.py','--sdk-source',sdk,

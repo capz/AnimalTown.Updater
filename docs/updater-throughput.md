@@ -1,5 +1,10 @@
 # Updater throughput: limits, measurements and staged plan
 
+This is the initial investigation snapshot. The subsequently authorized, strictly
+sequential TCP-window, SDK-read and SD-batching implementation is documented in
+[the checkpoint report](sequential-throughput/README.md). Its bounded 32 KiB
+workspace keeps 16 KiB SDK requests intact while accumulating SD batches.
+
 Baseline: updater `c03ea7d8bf1073e89497dc4c1db29328164875a0`, including the
 background-executor fix and live speed display. The user's approximately
 200 **kB/s** report predates those fixes; it is not a measured result from this
