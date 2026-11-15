@@ -26,3 +26,17 @@ Dolphin raw-TCP debugger fixture was inconclusive and is not counted as packet
 or throughput acceptance. Real SYN/window, loss recovery and sustained BBA
 throughput still need console testing. The ideal window/RTT bound at 40 ms grows
 from 73 kB/s to 819 kB/s; this is a model, not measured speed.
+
+## Stage 2: SDK reads
+
+After stage 1 passed, the SDK gained `HttpClient.StreamReadBufferSize` (default
+4096; valid 4096..16384), captured at request start. The updater selects 16384.
+The stream input grows from 8 to 16 KiB for this opt-in. Both its native TLS read
+and managed operation honor the quantum; short reads remain legal. The managed
+heap cap is unchanged.
+
+Real local verified HTTPS through Debug/Release AOT and GC stress compared the
+same 65,567-byte payload: Content-Length used 17 -> 5 reads; chunked used 21 -> 9.
+Bytes matched exactly, maximum reads were 16384/16378. TLS trust/time/hostname,
+redirect/credential isolation, downgrade, truncation and cancellation regressions
+also passed. These are operation counts, not hardware download rates.

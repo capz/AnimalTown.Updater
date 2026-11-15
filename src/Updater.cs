@@ -54,7 +54,7 @@ internal static class Updater
             await NetworkRuntime.StartAsync(new NetworkOptions(),token);await ConfigureTls(token);
             string target=selected.Path;
             using(var http=new HttpClient()){
-                http.MaximumResponseBytes=ReleaseInfo.MaximumFeedBytes;http.MaximumStreamBytes=int.MaxValue;
+                http.MaximumResponseBytes=ReleaseInfo.MaximumFeedBytes;http.MaximumStreamBytes=int.MaxValue;http.StreamReadBufferSize=16384;
                 http.DefaultRequestHeaders.Add("User-Agent","AnimalTown-Updater/3");http.DefaultRequestHeaders.Add("Accept","*/*");
                 Phase=2;Status="Checking the latest numbered release";
                 var release=await ReadStableRelease(http,token);

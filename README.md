@@ -43,16 +43,17 @@ controller cancellation stays on the UI executor.
 
 `async/await` by itself does not make this change: starting the old workflow on
 the UI executor captured that executor for its continuations, and productive
-frame waits are opt-in in the pinned SDK. The SDK HTTP stream returns at most
-4 KiB per read despite the updater's 16 KiB application buffer. One such read
+frame waits are opt-in in the pinned SDK. The legacy SDK HTTP stream returned at most
+4 KiB per read despite the updater's 16 KiB application buffer. This build opts
+in to 16 KiB SDK body reads. One such read
 per 50/60 Hz UI frame gives approximately 200/240 KiB/s, consistent with the
 reported roughly 200 kB/s. This is a scheduling explanation, not a measured
 hardware diagnosis or a configured BBA bandwidth limit.
 
 The BBA has a 10/100 Mbit/s Ethernet link, but EXI transfers, TCP receive-window
 size/latency, TLS and SHA-256 work on the GameCube CPU, and SD writes also limit
-end-to-end HTTPS throughput. This change does not force link speed/duplex, alter
-TCP windows, weaken HTTPS verification or increase the 1 MiB managed heap.
+end-to-end HTTPS throughput. The throughput build opts into a 32 KiB TCP receive window. It does not force
+link speed/duplex, weaken HTTPS verification or increase the 1 MiB managed heap.
 Physical throughput still needs console measurement.
 
 `tests/test_native_worker.py` executes the production worker wrapper with the
