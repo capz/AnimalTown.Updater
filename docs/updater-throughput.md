@@ -99,8 +99,9 @@ justify changing the updater's streaming/cancellation behavior.
    completion/readback or physical image verification.
 3. **Test a rebuilt BBA receive window before further UI tuning.** Build the
    pinned libbba source with 16 KiB, then 32 KiB windows. At 40 ms those provide
-   model bounds of 410 and 819 kB/s; 64 KiB would be needed to approach 1 MB/s
-   at that latency. Audit pbuf pool, out-of-order queue and simultaneous socket
+   model bounds of 410 and 819 kB/s. A 1 MB/s target at that latency needs
+   at least 40,000 bytes; test up to **65,535**, not 65,536, without TCP window
+   scaling (the window is 16-bit). Audit pbuf pool, out-of-order queue and simultaneous socket
    memory first, then verify the advertised window in packets. This needs a
    reproducible SDK/toolchain change: the updater cannot fix the compiled
    `TCP_WND` by allocating a larger C# buffer. The SDK does not expose a receive
