@@ -8,11 +8,12 @@ internal static class Program
     private static int Main()
     {
         DebugOverlay.PerformanceVisible=false;DebugOverlay.TextVisible=false;
+        Dolphin.Threading.Tasks.Scheduler.ProductiveWaits=true;
         using var console=new UpdaterConsole();
         using var cancel=new CancellationTokenSource();
         // Present the console before storage/network initialization can fail.
         console.Draw(Updater.Status,true,false,0,0,0,"");
-        var task=Updater.Run(cancel.Token);
+        var task=UpdateWorker.Run(cancel.Token);
         while(!task.IsCompleted){
             Controller.Update();if(Controller.GetState(0).B.WasPressed)cancel.Cancel();
             console.Draw(Updater.Status,true,false,Updater.Phase,Updater.DownloadedBytes,Updater.TotalBytes,Updater.Artifact);

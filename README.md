@@ -6,7 +6,45 @@ passes its running build version. The updater discovers the highest stable
 AnimalTown image on GC Loader storage, downloads the new stable release beside
 it with the published filename, switches GC Loader to that file and verifies
 physical disc readback, then deletes the selected old image and exits into Swiss
-to autoload the downloaded ISO.
+to boot the downloaded ISO without stopping at its game-information screen.
+
+Swiss receives separate `Autoload=<image>`, `AutoBoot=Yes`, `BS2Boot=No` and
+`Prefer Clean Boot=No` arguments, with its executable path as argv[0]. Both a
+newly installed image and the already-current path use this handoff. Swiss is
+still the image loader; its own startup or error screens can appear, and holding
+B retains Swiss's intentional autoboot override. This restarts the game; it does
+not restore the previous process's live memory.
+
+## Download scheduling
+
+The update workflow starts explicitly on the SDK background executor. Its
+continuations, HTTP reads, hashing and SD writes remain there while the UI runs
+on the application executor. `Scheduler.ProductiveWaits` releases the managed
+execution gate during synchronous GPU/VSync waits. VSync stays enabled and
+controller cancellation stays on the UI executor.
+
+`async/await` by itself does not make this change: starting the old workflow on
+the UI executor captured that executor for its continuations, and productive
+frame waits are opt-in in the pinned SDK. The SDK HTTP stream returns at most
+4 KiB per read despite the updater's 16 KiB application buffer. One such read
+per 50/60 Hz UI frame gives approximately 200/240 KiB/s, consistent with the
+reported roughly 200 kB/s. This is a scheduling explanation, not a measured
+hardware diagnosis or a configured BBA bandwidth limit.
+
+The BBA has a 10/100 Mbit/s Ethernet link, but EXI transfers, TCP receive-window
+size/latency, TLS and SHA-256 work on the GameCube CPU, and SD writes also limit
+end-to-end HTTPS throughput. This change does not force link speed/duplex, alter
+TCP windows, weaken HTTPS verification or increase the 1 MiB managed heap.
+Physical throughput still needs console measurement.
+
+`tests/test_native_worker.py` executes the production worker wrapper with the
+real pinned SDK AOT scheduler and execution gate. A bounded scheduling workload
+advanced 128 steps over 10 simulated UI frames, with progress during seven
+20 ms presentation waits; it also checks continuation context, cancellation
+and error propagation. These are host scheduling results, not BBA transfer
+rates. Native scan tests additionally retain real updater reachability, the
+1 MiB heap and simulated 60 Hz UI waits across wide, candidate-heavy and deep
+directory trees.
 
 The complete updater executable, including its public HTTPS trust anchors, is
 copied into MEM1 before launch; its console uses the IPL font and needs no disc
