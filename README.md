@@ -27,6 +27,9 @@ This measures delivered payload progress, including network, storage and hashing
 pacing, rather than Ethernet link speed. No extra network reads or per-frame
 rate-string formatting are needed.
 
+See [throughput limits, measured optimization and next experiments](docs/updater-throughput.md)
+for the BBA/EXI/TCP ceilings and reproducible native comparisons.
+
 ## Download scheduling
 
 The update workflow starts explicitly on the SDK background executor. Its
