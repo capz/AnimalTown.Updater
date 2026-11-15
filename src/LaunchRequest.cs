@@ -3,29 +3,28 @@ using System.IO;
 
 namespace AnimalTown.Updater;
 
-// v2 starts stable-image discovery. v1 remains readable for older games;
-// its path is legacy context and does not override the new selection policy.
+// v3 reads the launched disc's version.md. Older launch envelopes remain
+// readable, but their paths never select an image for replacement or deletion.
 internal sealed class LaunchRequest
 {
     internal const string Protocol="--animaltown-update=1";
     internal const string DiscoveryProtocol="--animaltown-update=2";
+    internal const string DiscVersionProtocol="--animaltown-update=3";
+    internal const string GamesDirectory="gcloader:/games/";
     internal readonly string Root="gcloader:/";
     internal readonly string Image,Version,Directory,Backup,Marker,DownloadDirectory;
 
     private LaunchRequest(string image,string version)
     {
-        Image=image;Version=version;
-        if(image.Length==0){Directory=Root;Backup=Marker="";DownloadDirectory=Root;return;}
+        Image=image;Version=version;DownloadDirectory=GamesDirectory;
+        if(image.Length==0){Directory=Root;Backup=Marker="";return;}
         int slash=image.Length-1;while(image[slash]!='/')slash--;Directory=image.Substring(0,slash+1);
         Backup=image+".bak";Marker=image+".update";
-        // Keep the published basename without ever aliasing an installed ISO
-        // that happens to have the same filename as the next release asset.
-        DownloadDirectory=Directory+".animaltown-update/";
     }
 
     internal static LaunchRequest Parse(string[] args)
     {
-        if(args!=null&&args.Length==3&&args[1]==DiscoveryProtocol){
+        if(args!=null&&args.Length==3&&(args[1]==DiscoveryProtocol||args[1]==DiscVersionProtocol)){
             ValidateLauncher(args[0]);ReleaseInfo.ParseVersion(args[2]);return new LaunchRequest("",args[2]);
         }
         if(args==null||args.Length!=4||args[0]==null||args[0].Length==0||args[1]!=Protocol)

@@ -18,6 +18,7 @@
     <Compile Include="../../src/UpdaterClock.cs" Link="UpdaterClock.cs" />
     <Compile Include="../../src/EmbeddedTrust.cs" Link="EmbeddedTrust.cs" />
     <Compile Include="../../src/LaunchRequest.cs" Link="LaunchRequest.cs" />
+    <Compile Include="../../src/IsoVersion.cs" Link="IsoVersion.cs" />
     <ProjectReference Include="$(ScanSdkSource)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
   </ItemGroup>
   <ItemGroup>

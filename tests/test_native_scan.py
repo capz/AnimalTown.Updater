@@ -73,7 +73,7 @@ def main():
     parser.add_argument('--scenario',choices=['small','wide','candidates','deep','all'],default='all')
     parser.add_argument('--ui',action='store_true',help='Exercise the real updater console managed drawing code between scan yields; native GX/font are fixed stubs')
     parser.add_argument('--automatic',action='store_true',help='Use SDK automatic executors and AOT safepoints, with no explicit scheduler pump')
-    parser.add_argument('--updater',action='store_true',help='Run production Updater.Run until the expected missing-Swiss boundary after scanning, retaining full network/launch reachability')
+    parser.add_argument('--updater',action='store_true',help='Run production version-file read until the missing-Swiss boundary, proving installed images are not scanned')
     parser.add_argument('--highest-created-first',action='store_true',help='Reverse highest-image creation order; emitted IO counters identify its actual enumeration position')
     parser.add_argument('--optimized',action='store_true',help='Match console O3/LTO and aliasing flags')
     args=parser.parse_args();sdk=args.sdk_source.resolve()
@@ -85,6 +85,8 @@ def main():
     generated=work/'scan.c';instrumented=work/'managed_runtime.c'
     run('dotnet',sdk/'tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll',
         '--aot',project.parent/'bin/Release/net8.0/ScanAotSmoke.dll',generated)
+    if args.updater and 'StableImageDiscovery_ScanAsync' in generated.read_text():
+        raise AssertionError('Installed-ISO scan remains reachable from the version-file updater')
     generated.write_text('#define dnd_fs_dir_next dnd_scan_dir_next\n#define dnd_fs_open dnd_scan_open\n#define dnd_fs_read dnd_scan_read\n#define dnd_fs_close dnd_scan_close\n'+generated.read_text())
     instrument_runtime(sdk,instrumented)
     runtime=['storage','contiguous_write','file_optimize','file_extents','verified_copy','timing',
@@ -107,13 +109,17 @@ def main():
         with tempfile.TemporaryDirectory(prefix='volume-'+scenario+'-',dir=work) as fixture_root:
             volume_root=Path(fixture_root)
             volume=fixture(volume_root,scenario,args.width if scenario!='deep' else min(args.width,100),args.highest_created_first)
-            if args.updater:swiss_fixture(volume)
+            if args.updater:
+                swiss_fixture(volume)
+                disc=volume_root/'dvd';disc.mkdir();(disc/'version.md').write_bytes(b'0.22.0')
             before=snapshot(volume)
             env=dict(os.environ,DND_STORAGE_ROOT=str(volume_root),DND_ASYNC_MANUAL='1',DND_SCAN_HEAP_BYTES='1048576')
             # Production Swiss discovery makes a second top-directory pass;
             # the injected-catalog streaming fixture makes one additional pass.
-            env['DND_SCAN_EXPECT_ENTRIES']=str(len(before)+(len(list(volume.iterdir()))+1 if args.updater else 0))
-            env['DND_SCAN_EXPECT_IMAGE_ENTRIES']=str(len(before))
+            if args.updater:env['DND_SCAN_VERSION_FILE_MODE']='1'
+            else:
+                env['DND_SCAN_EXPECT_ENTRIES']=str(len(before))
+                env['DND_SCAN_EXPECT_IMAGE_ENTRIES']=str(len(before))
             if args.updater:env['DND_SCAN_EXPECT_SWISS_BYTES']=str(2097408+256+32)
             if args.updater:env['DND_SCAN_EXPECT_AUTO_DEFRAG']='1'
             if args.automatic:env.pop('DND_ASYNC_MANUAL',None)

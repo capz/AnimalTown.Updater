@@ -21,7 +21,13 @@ internal static class Program
         try{
             using var launch=task.GetAwaiter().GetResult();
             Dolphin.Storage.Storage.Unmount(Dolphin.Storage.StorageDevice.GcLoader);
-            if(Dolphin.Storage.Storage.IsMounted(Dolphin.Storage.StorageDevice.GcLoader))throw new System.IO.IOException("Could not release GC Loader before Swiss handoff");
+            if(Dolphin.Storage.Storage.IsMounted(Dolphin.Storage.StorageDevice.GcLoader))throw new System.IO.IOException("Could not release GC Loader after the update check");
+            if(launch==null){
+                while(true){
+                    Controller.Update();if(Controller.GetState(0).B.WasPressed)return 0;
+                    console.Draw(Updater.Status,false,false,Updater.Phase,0,0,"",IsoVersion.DiscPath,Updater.Operation);
+                }
+            }
             Dolphin.IO.DolLauncher.RequestLaunch(launch);
             return 0;
         }catch(Exception error){

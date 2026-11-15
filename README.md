@@ -2,15 +2,19 @@
 
 Standalone GameCube updater written in C# with DolphinDotNet. The output is
 `animal-town-updater.dol`. AnimalTown's title menu launches this executable and
-passes its running build version. The updater discovers the highest stable
-AnimalTown image on GC Loader storage, downloads the new stable release beside
-it with the published filename, switches GC Loader to that file and verifies
-physical disc readback, then deletes the selected old image and exits into Swiss
-to boot the downloaded ISO without stopping at its game-information screen.
+passes its running build version. The updater mounts the launched disc, reads
+its root `version.md` through a 64-byte bound and confirms the launch identity.
+It compares that numeric version with the compact online release feed and
+downloads a newer release as `gcloader:/games/<published filename>`. It switches
+GC Loader to the verified file, checks physical disc readback and exits into
+Swiss to boot it. No installed-ISO scan is performed. Existing images are kept:
+the version file identifies the running version, not its physical filename.
 
 Swiss receives separate `Autoload=<image>`, `AutoBoot=Yes`, `BS2Boot=No` and
 `Prefer Clean Boot=No` arguments, with its executable path as argv[0]. Both a
-newly installed image and the already-current path use this handoff. Swiss is
+newly installed image uses this handoff. An already-current or newer running
+disc instead reports success and waits for B to exit, without guessing a path
+to autoload. Swiss is
 still the image loader; its own startup or error screens can appear, and holding
 B retains Swiss's intentional autoboot override. This restarts the game; it does
 not restore the previous process's live memory.
@@ -61,31 +65,25 @@ real pinned SDK AOT scheduler and execution gate. A bounded scheduling workload
 advanced 128 steps over 10 simulated UI frames, with progress during seven
 20 ms presentation waits; it also checks continuation context, cancellation
 and error propagation. These are host scheduling results, not BBA transfer
-rates. Native scan tests additionally retain real updater reachability, the
-1 MiB heap and simulated 60 Hz UI waits across wide, candidate-heavy and deep
-directory trees.
+rates. Native tests retain real updater reachability, the 1 MiB heap and
+simulated 60 Hz UI waits. The version-file flow must leave even a higher-version
+ISO unread while checking the disc file and finding Swiss at the drive root.
 
 The complete updater executable, including its public HTTPS trust anchors, is
 copied into MEM1 before launch; its console uses the IPL font and needs no disc
-assets after launch. It explicitly unmounts `dvd:/` before
+assets after the initial `version.md` read. It explicitly unmounts `dvd:/` before
 mounting the writable GC Loader card or changing an installation,
 and refuses to continue if the disc remains mounted. This preserves the source-
 disc release fix from [PR #2](https://github.com/capz/AnimalTown.Updater/pull/2).
 Image replacement then needs no further executable or asset reads from that
 disc. The download streams to SD; it is never buffered in RAM in full.
 
-The scan walks the GC Loader volume and reads `.iso` and `.gcm` image headers,
-including `.nkit.iso`, regardless of their basename. AnimalTown already embeds
-`AnimalTown / MAJOR.MINOR.PATCH` at boot-header offset `0x20`, before NKit metadata
-at `0x200`; renaming the file does not change this identity. The embedded version
-is authoritative, even when the filename claims another version. Versions compare
-numerically, so `0.11.10` sorts after `0.11.9`. Embedded commit-hash/development
-versions, foreign or truncated headers, backups and partial downloads are excluded,
-as are updater and SDK transaction/staging paths. The scan reuses one 1,088-byte
-header buffer and closes each file before proceeding. Equal versions use a deterministic,
-ASCII-case-insensitive path ordering. The selected file is the installation
-to replace: GC Loader does not reveal which physical filename booted the game.
-The game does not require an `image-path.txt` mapping to start this updater.
+The game release builder freezes its version before assembling the image and
+writes exactly that ASCII value to `version.md`: no BOM, newline or Markdown
+formatting. Disc validation checks it against the build identity and boot title.
+Renaming an ISO does not affect the mounted file. A missing, invalid, oversized
+or mismatched version file fails before writable storage or network setup.
+The updater does not fall back to an ISO scan or `image-path.txt`.
 
 The updater reads
 [`releases/latest/download/update.json`](https://github.com/capz/AnimalTown/releases/latest/download/update.json),
@@ -93,7 +91,7 @@ a maximum 2 KiB document published with the numbered main release. It contains
 only its tag and exact ISO basename, HTTPS URL, size and SHA-256. GitHub's latest
 regular release excludes hash-suffixed PR prereleases; the updater also validates
 the numeric tag and exact repository/tag/asset URL itself. An equal or newer
-installed numeric version is kept, including across the old patch numbering and
+running numeric version is kept, including across the old patch numbering and
 new automatically incremented minor numbering (`0.11.38` to `0.12.0`).
 
 The former releases API scan buffered entire pages and parsed eligible releases
@@ -106,21 +104,16 @@ download or image replacement. Requires an AnimalTown main release that publishe
 the compact feed (starting at `0.12.0`).
 
 The ISO streams into checked contiguous storage with a fixed 32 KiB coalescing workspace and 16 KiB reads/writes. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
-must match before deletion. The new ISO keeps GitHub's filename in the selected
-old image's directory; it is never renamed to the old filename. Contiguous-file
+must match before activation. The new ISO keeps GitHub's filename in `/games`;
+it is never renamed to an old filename. Contiguous-file
 publication and card readback complete before GC Loader's hardware image mapping
 is changed. The SDK then reads the physical DVD interface and compares the whole
-boot header with the verified file. Only a successful map-and-readback permits
-deletion of the selected old ISO. When no newer release is needed, the selected
-image is revalidated and handed directly to Swiss without physical remapping or
-file deletion. This preserves Swiss's normal handling of manually copied,
-possibly fragmented images. New-version replacements still require successful
-physical selection/readback before deleting the old ISO; newly downloaded images
-use contiguous allocation. A failed replacement selection retains both files.
-Other installations and development images are left alone. A failed download,
-verification, disc selection, helper preparation or cancellation preserves the
-selected old ISO. A failed selection can leave the drive mapping changed; both
-files remain available for manual recovery.
+boot header with the verified file. A pre-existing destination is never
+truncated: only an exact size/digest/version match can be reused. Otherwise
+the update stops and preserves it. A failed download, verification, selection,
+helper preparation or cancellation preserves every prior image. A failed
+selection can leave the drive mapping changed; files remain available for
+manual recovery.
 
 Writable SD operations run inside the SDK's automatic-defragmentation scope,
 with a 64 KiB minimum file size. The previous policy and threshold are restored
@@ -134,8 +127,8 @@ be met; automatic defragmentation is not a fragmented-download fallback.
 
 Use direct GC Loader firmware boot with writable SD-sector support, a FAT32 or
 exFAT card, and a working Broadband Adapter with Internet/DNS access. The game
-image must contain a stable embedded release version and retain an `.iso` or
-`.gcm` extension; its basename can be changed. For example:
+image must contain `version.md` matching its embedded release version; its
+basename can be changed. For example:
 
 ```text
 /games/AnimalTown/AnimalTown-0.11.36.nkit.iso
@@ -163,9 +156,9 @@ New or custom builds need a catalog update. Use the archive's normal
 `DOL/swiss_rXXXX.dol`, since legacy-LZ variants cannot accept launch arguments.
 No Swiss binary is bundled with the updater.
 
-The SDK stages and validates that executable before deleting an ISO, then passes
+The SDK stages and validates that executable before downloading an ISO, then passes
 `Autoload=gcldr:/.../<published filename>` to Swiss. The updater selects and
-verifies the new physical mapping before deleting the old image. Swiss performs
+verifies the new physical mapping after download verification. Swiss performs
 its normal image/ODE setup and apploader boot after the handoff. No
 replacement-game raw DOL is launched against the old disc mapping.
 
@@ -203,9 +196,10 @@ install Swiss for this updater, copy a supported normal official DOL to the driv
 root as described above; running the legacy provisioner is unnecessary.
 
 The game handoff contains three separate argv entries: updater DOL path,
-`--animaltown-update=2`, and running build version. Legacy v1 requests remain
-readable for compatibility. The updater's SD scan chooses the installation;
-the launch version does not select a filesystem path.
+`--animaltown-update=3`, and running build version. Legacy v1/v2 envelopes remain
+readable, but a disc version file is required and legacy paths do not select a
+replacement/deletion target. The mounted version file supplies the comparison;
+all downloads use `/games`.
 
 ## Build
 
@@ -238,11 +232,12 @@ dotnet run --project tests/Updater.Tests.csproj -c Release
 ## Validation and recovery
 
 The automated checks cover SHA-256 padding/multiblock vectors, direct NKit release
-selection, renamed ISO/GCM discovery, exclusion of embedded development versions,
-numeric version comparisons, directory scanning, asset identity, scoped automatic
-defragmentation and policy restoration, selection-before-deletion ordering and
-injected selection/deletion failures, plus launch-path validation and protocol
-handoff. Trust checks verify all 118 roots and their fingerprints, reject stale
+selection, exact bounded version-file reads, numeric version comparisons,
+fixed `/games` paths, asset identity, scoped automatic defragmentation and policy
+restoration, plus launch-path validation and protocol handoff. Historical scan
+and replacement helpers retain their regression fixtures, but build guards
+require them to be absent from the production updater's AOT reachability.
+Trust checks verify all 118 roots and their fingerprints, reject stale
 generated data, and exercise the exact generated bytes through native AOT with
 the real 1 MiB managed heap and GC stress. The SDK checks local-clock certificate
 intervals, entropy-provider failure paths and secret-buffer clearing separately.
@@ -252,27 +247,29 @@ interruption need hardware acceptance. FAT directory
 renames are not guaranteed power-loss atomic. Never remove power/card during
 installation.
 
-The build also runs the production updater scan and console drawing code through
+The build also runs the production updater startup and console drawing code through
 the SDK's native AOT runtime with the actual 1 MiB managed heap. Wide directories,
 thousands of stable/development images and 30 nested directories must complete
-with bounded retained memory and closed file handles. The pinned SDK tests its
+with bounded retained memory and closed file handles, opening zero installed
+ISO/GCM files. It checks that the version file is read before the writable mount
+and that the disc has been released before Swiss root enumeration. The pinned SDK tests its
 real FAT32/exFAT driver separately: the original driver's 10-level exFAT path
 limit reported `OutOfMemoryException` without exhausting memory. Its replacement
-supports 64 levels and reports a path-depth error beyond that limit. Scan failures
-show the current directory or image path, and native exceptions retain their
+supports 64 levels and reports a path-depth error beyond that limit. Failures
+show the current operation/path, and native exceptions retain their
 diagnostic text even when managed memory is exhausted.
 
-Publication and verified physical disc selection precede deletion, so a power
-cut can leave both complete images;
-the next scan selects the highest valid stable version. A partial download is
-not an installed candidate. Existing valid new-image collisions are verified
+Publication and verified physical disc selection preserve every prior image.
+After a power cut, launch an existing complete game and retry; its version file
+determines whether a newer release is required. Partial downloads are never
+booted. Existing valid new-image collisions are verified
 before reuse, and damaged collisions stop the update rather than overwriting
 an unrelated file. The updater does not touch memory-card town or dev-config
-saves. Legacy `.bak` and `.update` files are not stable-image candidates.
+saves or legacy `.bak`/`.update` recovery files.
 
 Completion requests the SDK's Swiss handoff and returns successfully from Main,
 releasing updater UI/network resources before Swiss starts the selected image.
-A missing or invalid Swiss helper stops the operation before old-image deletion.
+A missing or invalid Swiss helper stops the operation before downloading.
 
 The updater console uses the native IPL font, a light gray canvas and dark gray
 text, a vertically centered status block and a 48-pixel safe area on every side.

@@ -27,6 +27,9 @@ def build_native(backend,tcp_window=32768):
         (binary/f'animal-town-updater.{extension}').unlink(missing_ok=True)
     if native.exists():shutil.rmtree(native)
     run('dotnet',compiler,'--bundle',binary/'animal-town-updater.dll',native)
+    generated=(native/'source/generated_program.c').read_text()
+    if 'IsoVersion_Read' not in generated or 'StableImageDiscovery_ScanAsync' in generated or 'InstallTransaction_ActivateAndDeleteSelected' in generated:
+        raise SystemExit('Updater must read the disc version without installed-ISO discovery or guessed-image deletion')
     run('python3',ROOT/'tools/patch-launch-arguments.py',native)
     # CI/Linux hosts check the exact pinned SDK producer and the bounded reader.
     # Docker-only desktop hosts still compile the bridge in the native build.

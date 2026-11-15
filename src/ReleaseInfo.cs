@@ -60,7 +60,12 @@ internal sealed class ReleaseInfo
         // neither those counters nor the commit hash form a total ordering.
         return local!=latest;
     }
-    internal static bool NeedsStableUpdate(string local,string latest)=>StableImageDiscovery.CompareVersions(local,latest)<0;
+    internal static bool NeedsStableUpdate(string local,string latest)
+    {
+        var installed=ParseVersion(local);var released=ParseStableVersion(latest);
+        for(int i=0;i<3;i++)if(installed[i]!=released[i])return installed[i]<released[i];
+        return false;
+    }
     // Every repository build is a GitHub prerelease, including main. Numeric
     // M.m.p identity, rather than that flag, distinguishes stable installations.
     // One release per page keeps metadata bounded in the 1 MiB managed heap.

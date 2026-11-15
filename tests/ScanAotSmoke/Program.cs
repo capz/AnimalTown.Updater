@@ -22,6 +22,9 @@ internal static class Program
 #if SCAN_UPDATER
         Dolphin.IO.Defrag.OptIn(false);Dolphin.IO.Defrag.MinimumFileSize=131072;
         VerifyAllocationScopes();
+        // The portable storage backend exposes a fixture directory for dvd:/;
+        // physical FST mounting itself requires the console/emulator backend.
+        if(!Storage.Mount(StorageDevice.DvdDrive))return 16;
         var scan=UpdateWorker.Run(CancellationToken.None);
 #else
         if(!Storage.Mount(StorageDevice.GcLoader))return 10;
@@ -41,7 +44,7 @@ internal static class Program
 #if SCAN_UPDATER
         try{scan.GetAwaiter().GetResult();return 12;}
         catch(OutOfMemoryException error){
-            if(error.Message!="Directory enumeration failed."||Updater.Phase!=0||Updater.Operation!="Find highest stable installation"||Updater.DownloadedBytes!=0||Updater.TotalBytes!=0||Updater.LaunchImage!="")throw;
+            if(error.Message!="Directory enumeration failed."||Updater.Phase!=0||Updater.Operation!="Prepare Swiss launch helper"||Updater.DownloadedBytes!=0||Updater.TotalBytes!=0||Updater.LaunchImage!="")throw;
             VerifyAllocationRestored();Storage.Unmount(StorageDevice.GcLoader);
             Console.WriteLine("Native enumeration ENOMEM retained before transfer");
             return 0;
@@ -67,18 +70,16 @@ internal static class Program
         var helper=swiss.GetAwaiter().GetResult();
         if(helper.Path!="gcloader:/swiss-streaming-fixture/renamed.DOL"||helper.Revision!=123)return 13;
         Console.WriteLine("Native Swiss discovery streamed a 2 MiB executable with the 1 MiB heap");
-        var unchanged=new UnchangedInstallFiles();
-        Action<string> mustNotRemap=static path=>throw new Exception("Already-current image must not reach physical selection");
-        InstallTransaction.ActivateAndDeleteSelected(unchanged,"gcloader:/AnimalTown-0.13.0.nkit.iso","gcloader:/AnimalTown-0.13.0.nkit.iso",mustNotRemap);
-        InstallTransaction.ActivateAndDeleteSelected(unchanged,"gcloader:/AnimalTown-0.13.0.nkit.iso","gcloader:/animaltown-0.13.0.nkit.iso",mustNotRemap);
-        if(unchanged.Checks!=4)return 14;
-        Console.WriteLine("Native already-current handoff: existence checked; physical remap and file mutation bypassed");
 #else
         var image=scan.GetAwaiter().GetResult();
         if(image.Version!="12.34.56"||image.Path!="gcloader:/boot.GCM")return 11;
 #endif
         Storage.Unmount(StorageDevice.GcLoader);
+#if SCAN_UPDATER
+        Console.WriteLine("Native updater read the launched version without installed-image discovery");
+#else
         Console.WriteLine("Native scan selected the expected highest stable image");
+#endif
         return 0;
     }
 #if SCAN_UPDATER
@@ -102,20 +103,11 @@ internal static class Program
 }
 
 #if SCAN_UPDATER
-internal sealed class UnchangedInstallFiles : IInstallFiles
-{
-    internal int Checks;
-    public bool Exists(string path){Checks++;return true;}
-    public void Move(string source,string target)=>throw new Exception("Unexpected move");
-    public void Delete(string path)=>throw new Exception("Unexpected delete");
-    public void Mark(string path)=>throw new Exception("Unexpected mark");
-    public bool HasMarker(string path)=>throw new Exception("Unexpected marker read");
-}
 namespace AnimalTown.Updater
 {
     internal static class NativeLaunchArguments
     {
-        internal static string[] Read()=>new[]{"dvd:/animal-town-updater.dol","--animaltown-update=2","0.11.36+060a89c8295e"};
+        internal static string[] Read()=>new[]{"dvd:/animal-town-updater.dol","--animaltown-update=3","0.22.0"};
     }
 }
 #endif
