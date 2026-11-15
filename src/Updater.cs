@@ -48,9 +48,8 @@ internal static class Updater
         string swissPath=swiss.Path;CurrentPath=swissPath;Status="Preparing Swiss r"+swiss.Revision;
         PreparedDol? launch=null;
         try{
-            string firstTarget=DiscLauncher.GetSwissImagePath(selected.Path);
             launch=await DolLauncher.PrepareAsync(swissPath,token);
-            launch.SetArguments(swissPath,"Autoload="+firstTarget);
+            launch.SetArguments(SwissLaunch.Arguments(swissPath,selected.Path));
             Phase=1;Operation="Start Broadband Adapter";CurrentPath="";Status="Starting Broadband Adapter";
             await NetworkRuntime.StartAsync(new NetworkOptions(),token);await ConfigureTls(token);
             string target=selected.Path;
@@ -77,7 +76,7 @@ internal static class Updater
             // Close HTTP/TLS and stop the network before the irreversible step.
             Operation="Stop updater network";CurrentPath=target;TlsConfiguration.Reset();NetworkRuntime.Stop();
             token.ThrowIfCancellationRequested();
-            Operation="Prepare new image autoload";launch.SetArguments(swissPath,"Autoload="+DiscLauncher.GetSwissImagePath(target));
+            Operation="Prepare new image autoload";launch.SetArguments(SwissLaunch.Arguments(swissPath,target));
             Operation="Revalidate selected installation";CurrentPath=selected.Path;
             if(ImageFiles.ReadVersion(selected.Path)!=selected.Version)throw new IOException("The selected installation changed during the update");
             bool replacing=StableImageDiscovery.ComparePaths(selected.Path,target)!=0;

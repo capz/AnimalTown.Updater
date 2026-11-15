@@ -12,7 +12,7 @@
 
 enum { BASE=0x80004000u, ABI=BASE+64u, COMMAND=BASE+256u, TABLE=BASE+4608u };
 static const uint8_t game_arguments[]="dvd:/animal-town-updater.dol\0--animaltown-update=2\0" "0.11.36+012345abcdef";
-static const uint8_t swiss_arguments[]="gcloader:/animaltown-updater/swiss.dol\0Autoload=gcldr:/Games/Caf\xc3\xa9 \xe7\x8c\xab/AnimalTown-0.11.37.nkit.iso";
+static const uint8_t swiss_arguments[]="gcloader:/animaltown-updater/swiss.dol\0Autoload=gcldr:/Games/Caf\xc3\xa9 \xe7\x8c\xab/AnimalTown-0.11.37.nkit.iso\0AutoBoot=Yes\0BS2Boot=No\0Prefer Clean Boot=No";
 static const uint8_t *arguments;
 static size_t argument_bytes;
 static unsigned expected_argc;
@@ -65,7 +65,7 @@ int main(void)
     DndArray *dol=array(image,sizeof(image));
     const struct {const uint8_t *bytes;size_t length;unsigned argc;} cases[]={
         {game_arguments,sizeof(game_arguments),3},
-        {swiss_arguments,sizeof(swiss_arguments),2}
+        {swiss_arguments,sizeof(swiss_arguments),5}
     };
     for(size_t i=0;i<sizeof(cases)/sizeof(cases[0]);i++){
         arguments=cases[i].bytes;argument_bytes=cases[i].length;expected_argc=cases[i].argc;

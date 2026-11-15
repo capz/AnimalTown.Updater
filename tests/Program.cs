@@ -6,6 +6,12 @@ using Dolphin.Timing;
 int checks=0;
 void Check(bool value,string name){checks++;if(!value)throw new Exception(name);}
 void Reject(Action action,string name){bool rejected=false;try{action();}catch(Exception){rejected=true;}Check(rejected,name);}
+foreach(string launchTarget in new[]{"gcloader:/Games/Café 猫/AnimalTown-0.14.0.nkit.iso","gcloader:/renamed.GCM"}){
+    var arguments=SwissLaunch.Arguments("gcloader:/renamed Swiss.DOL",launchTarget);
+    Check(arguments.SequenceEqual(new[]{"gcloader:/renamed Swiss.DOL","Autoload=gcldr:/"+launchTarget.Substring(10),"AutoBoot=Yes","BS2Boot=No","Prefer Clean Boot=No"}),"Swiss launches new or unchanged images without a game selection prompt");
+}
+foreach(string launchTarget in new[]{"gcloader:/../escape.iso","gcloader:/bad\nAutoBoot=No.iso","gcloader:/bad=setting.iso"})
+    Reject(()=>SwissLaunch.Arguments("gcloader:/boot.dol",launchTarget),"Swiss autoload cannot inject a configuration or escape the volume");
 foreach(var date in new[]{new CalendarTime(2024,1,1,14,0),new CalendarTime(2024,2,29,23,59,59),new CalendarTime(2026,11,14,12,34,56),new CalendarTime(2038,1,18,13,14,7)}){
     long expected=new DateTimeOffset(date.Year,date.Month,date.Day,date.Hour,date.Minute,date.Second,TimeSpan.Zero).ToUnixTimeSeconds();
     Check(UpdaterClock.LocalUnixSeconds(date)==expected,"console local calendar is encoded exactly as the clock-window center");

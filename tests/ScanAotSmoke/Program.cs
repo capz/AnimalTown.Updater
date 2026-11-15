@@ -9,13 +9,14 @@ internal static class Program
     private static int Main()
     {
 #if SCAN_UI
+        Scheduler.ProductiveWaits=true;
         using var console=new UpdaterConsole();
         console.Draw("Searching GC Loader for stable AnimalTown images",true,false,0,0,0,"");
 #endif
 #if SCAN_UPDATER
         Dolphin.IO.Defrag.OptIn(false);Dolphin.IO.Defrag.MinimumFileSize=131072;
         VerifyAllocationScopes();
-        var scan=Updater.Run(CancellationToken.None);
+        var scan=UpdateWorker.Run(CancellationToken.None);
 #else
         if(!Storage.Mount(StorageDevice.GcLoader))return 10;
         var scan=StableImageDiscovery.ScanAsync("gcloader:/",CancellationToken.None);

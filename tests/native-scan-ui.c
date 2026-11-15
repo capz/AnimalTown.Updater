@@ -3,9 +3,15 @@
 #include "dnd_draw.h"
 #include "dnd_async.h"
 #include <assert.h>
+#include <time.h>
 static bool frame;
 int dnd_device_begin(float r,float g,float b,float a){(void)r;(void)g;(void)b;(void)a;assert(!frame);frame=true;return 0;}
-int dnd_device_end(void){assert(frame);frame=false;return 0;}
+int dnd_device_end(void){
+    assert(frame);frame=false;
+    int context=dnd_async_app_wait_begin();
+    struct timespec delay={0,16666667};nanosleep(&delay,NULL);
+    dnd_async_app_wait_end(context);return 0;
+}
 int dnd_device_width(void){return 640;}
 int dnd_device_height(void){return 480;}
 int dnd_device_display_stat(int kind){(void)kind;return 0;}
