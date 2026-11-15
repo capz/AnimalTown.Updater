@@ -51,16 +51,17 @@ The fixture compiles the baseline and production SHA through the exact pinned
 SDK AOT, allocates a 1 MiB managed heap, verifies both digests against an
 independent SHA-256 digest, warms both implementations and alternates execution
 order. Each of five pairs processes identical 256 KiB inputs in 16 KiB chunks.
-The PowerPC compiler uses `-O2`, matching the production native optimization
-level. Dolphin 2503 executes the resulting GameCube DOL; timings come from the
+The PowerPC compiler uses the effective release flags **`-O3 -flto -fno-strict-aliasing`**.
+The bundled release Makefile appends these after its initial `-O2`; the later
+optimization flag takes precedence. Dolphin 2503 executes the resulting GameCube DOL; timings come from the
 guest monotonic clock and are read from guest memory only after a successful
 completion. Null graphics keeps presentation outside this isolated CPU test.
 
 | Experiment | Baseline median | Candidate median | Decision |
 | --- | ---: | ---: | --- |
-| PowerPC AOT SHA, 256 KiB | 162.903 ms | 124.231 ms | Retain: **23.7% less hashing time** |
-| Host AOT SHA, 256 KiB | 4.379 ms | 3.444 ms | Supporting check only |
-| Host checked-writer 4 KiB versus 16 KiB writes, 32 MiB | 95.714 ms | 88.065 ms | Reject: 8.0% median saving, below gate; two large regressions; no SD measurement |
+| PowerPC AOT SHA, 256 KiB | 159.150 ms | 120.605 ms | Retain: **24.2% less hashing time** |
+| Host AOT SHA, 256 KiB | 4.101 ms | 2.954 ms | Supporting check only |
+| Host checked-writer 4 KiB versus 16 KiB writes, 32 MiB | 98.410 ms | 92.884 ms | Reject: 5.6% median saving, below gate; pairwise regressions; no SD measurement |
 
 [Raw PowerPC evidence](throughput-evidence/powerpc-sha.json) includes all pairs,
 DOL digest, SDK identity and source digest. [Host SHA](throughput-evidence/host-sha.json)
@@ -69,9 +70,9 @@ complete 64-byte SHA blocks directly from the input array, buffering only partia
 blocks. The digest, finalization rules and fixed working memory are preserved.
 It benefits download hashing and later image/Swiss verification.
 
-This is a **hash-phase improvement, not a measured 23.7% download improvement**.
+This is a **hash-phase improvement, not a measured 24.2% download improvement**.
 For illustration only, at 200 kB/s the measured guest hash cost would account for
-about 12.4% of elapsed transfer time. Reducing that component by 23.7% would save
+about 12.1% of elapsed transfer time. Reducing that component by 24.2% would save
 about 3% of total time if everything else stayed constant. Actual hardware and
 pipeline behavior must be measured. The component acceptance gate was a
 repeatable >10% time reduction on PowerPC with correct digests and unchanged

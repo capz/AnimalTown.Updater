@@ -52,8 +52,8 @@ internal static class Program {
     run('dotnet',compiler,'--aot',work/'bin/Release/net8.0/Bench.dll',work/'bench.c')
     (work/'host.c').write_text((ROOT/'tests/throughput-host.c').read_text())
     sources=[sdk/'source'/(s+'.c') for s in ['managed_runtime','async_runtime','stw','gc_stw','text','numeric','bcl','timing']]
-    flags=['-O2','-g','-fno-strict-aliasing','-ffunction-sections','-fdata-sections','-I'+str(sdk/'include')]
-    metadata={'baseline_commit':BASELINE,'sdk_commit':actual,'candidate_sha256':hashlib.sha256(candidate.encode()).hexdigest(),'bytes_per_sample':262144,'pairs':5,'digest':digest,'compiler_flags':flags[:5]}
+    flags=['-O3','-flto','-g','-fno-strict-aliasing','-ffunction-sections','-fdata-sections','-I'+str(sdk/'include')]
+    metadata={'baseline_commit':BASELINE,'sdk_commit':actual,'candidate_sha256':hashlib.sha256(candidate.encode()).hexdigest(),'bytes_per_sample':262144,'pairs':5,'digest':digest,'compiler_flags':flags[:6]}
     if args.storage_probe and args.target!='host':raise SystemExit('--storage-probe is host-only')
     if args.target=='host':
         run('cc',*flags,'-D_DEFAULT_SOURCE','-pthread',work/'host.c',*sources,'-Wl,--gc-sections','-lm','-o',work/'bench-host')
