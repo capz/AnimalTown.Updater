@@ -14,6 +14,14 @@ internal static class ConsoleText
         return tenths/10+"."+tenths%10;
     }
     internal static string Transfer(long received,long total)=>MiB(received)+" MiB / "+MiB(total)+" MiB";
+    // Decimal bits, not bytes. Select the unit before truncating to one decimal.
+    internal static string Speed(long bitsPerSecond)
+    {
+        bitsPerSecond=Math.Max(0,bitsPerSecond);
+        bool megabits=bitsPerSecond>=1000000;
+        long tenths=bitsPerSecond/(megabits?100000:100);
+        return tenths/10+"."+tenths%10+(megabits?" Mb/s":" kb/s");
+    }
     // Wrap actual proportional IPL advances; hard-break long paths/filenames.
     // The caller supplies a fixed row budget, keeping every glyph in safe area.
     internal static int Wrap(string text,float width,Func<string,float> measure,string[] rows)

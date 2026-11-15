@@ -10,6 +10,12 @@ internal static class Program
     {
 #if SCAN_UI
         Scheduler.ProductiveWaits=true;
+        var rate=new DownloadSpeed();rate.Update(true,0,0);rate.Update(true,50000,500000);
+        if(rate.Text!="800.0 kb/s")throw new Exception("Native kilobit speed formatting failed");
+        rate.Update(true,150000,1000000);
+        if(rate.Text!="1.6 Mb/s")throw new Exception("Native megabit speed formatting failed");
+        rate.Update(false,150000,1000001);
+        if(rate.Text!="")throw new Exception("Native speed visibility failed");
         using var console=new UpdaterConsole();
         console.Draw("Searching GC Loader for stable AnimalTown images",true,false,0,0,0,"");
 #endif

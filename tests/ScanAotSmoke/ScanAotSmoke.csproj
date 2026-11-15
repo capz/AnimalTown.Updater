@@ -8,6 +8,7 @@
     <ProjectReference Include="$(ScanSdkSource)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
     <Compile Include="../../src/UpdaterConsole.cs" Link="UpdaterConsole.cs" />
     <Compile Include="../../src/ConsoleText.cs" Link="ConsoleText.cs" />
+    <Compile Include="../../src/DownloadSpeed.cs" Link="DownloadSpeed.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(ScanUpdater)' == 'true'">
     <Compile Include="../../src/Updater.cs" Link="Updater.cs" />

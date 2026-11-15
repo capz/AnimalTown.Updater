@@ -13,6 +13,7 @@ internal sealed class UpdaterConsole : IDisposable
     private readonly Func<string,float> measure,measureDiagnostic;
     private readonly float scale,lineHeight,dotCell,diagnosticScale,diagnosticLineHeight;
     private readonly long began=Clock.Timestamp;
+    private readonly DownloadSpeed speed=new DownloadSpeed();
     private string cachedStatus="",cachedTransfer="",cachedPercent="",cachedOperation="",cachedDetail="";
     private bool cachedFailed;
     private int lineCount=1,operationCount,detailCount,lastPercent=-1;private long lastReceived=-1,lastTotal=-1;
@@ -22,6 +23,7 @@ internal sealed class UpdaterConsole : IDisposable
     private float MeasureDiagnostic(string text)=>font.MeasureText(text,diagnosticScale).X;
     internal void Draw(string status,bool busy,bool failed,int phase,long received,long total,string artifact,string detail="",string operation="")
     {
+        speed.Update(busy&&!failed&&phase==3,received,Clock.Timestamp);
         if(status!=cachedStatus||failed!=cachedFailed){cachedStatus=status;cachedFailed=failed;lineCount=ConsoleText.Wrap(status,Width-dotCell*3-10,measure,failed?failureLines:lines);}
         if(operation!=cachedOperation){cachedOperation=operation;operationCount=operation.Length>0?ConsoleText.Wrap(operation,Width,measureDiagnostic,operationLines):0;}
         if(detail!=cachedDetail){cachedDetail=detail;detailCount=detail.Length>0?ConsoleText.Wrap(detail,Width,measureDiagnostic,detailLines):0;}
@@ -35,6 +37,7 @@ internal sealed class UpdaterConsole : IDisposable
         float y=Math.Max(111,(480-bodyHeight)/2);
         Text(failed?"UPDATE STOPPED":Stage(phase),Left,y,11,muted);
         if(failed)Right(Stage(phase),Left+Width,y,11,muted);
+        else if(speed.Text.Length>0)Right(speed.Text,Left+Width,y,11,muted);
         y+=30;var statusLines=failed?failureLines:lines;
         for(int i=0;i<lineCount;i++)ui.DrawText(font,statusLines[i]??"",new Vector2(Left,y+i*lineHeight),ink,scale);
         if(busy&&!failed){

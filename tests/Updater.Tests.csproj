@@ -6,5 +6,6 @@
   <ItemGroup><Compile Include="../src/UpdaterClock.cs" Link="UpdaterClock.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../src/SwissDiscovery.cs" Link="SwissDiscovery.cs" /><Compile Include="../src/SwissBuilds.cs" Link="SwissBuilds.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../src/SwissLaunch.cs" Link="SwissLaunch.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../src/DownloadSpeed.cs" Link="DownloadSpeed.cs" /></ItemGroup>
   <ItemGroup><PackageReference Include="DolphinDotNet.Core" Version="[0.1.0-updater.8]" /><Compile Include="../src/ConsoleText.cs" Link="ConsoleText.cs" /><Compile Include="../src/ReleaseInfo.cs" Link="ReleaseInfo.cs" /><Compile Include="../src/LaunchRequest.cs" Link="LaunchRequest.cs" /><Compile Include="../src/Sha256.cs" Link="Sha256.cs" /><Compile Include="../src/ImageFiles.cs" Link="ImageFiles.cs" /></ItemGroup>
 </Project>
