@@ -39,6 +39,16 @@ foreach(int size in new[]{0,1,3,55,56,63,64,65,127,128,1000,1000000}){
     for(int at=0;at<size;at+=17)sha.Append(data,at,Math.Min(17,size-at));
     Check(sha.Finish()==Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant(),"SHA-256 boundary / multiblock "+size);
 }
+// Exercise the direct full-block path, buffered tails and nonzero source offsets.
+foreach(int stride in new[]{1,17,63,64,65,127,4096,16384}){
+    var data=new byte[32771];for(int i=0;i<data.Length;i++)data[i]=(byte)((i*29+7)%251);
+    var sha=new Sha256();
+    for(int at=3;at<data.Length-2;){int count=Math.Min(stride,data.Length-2-at);sha.Append(data,at,count);sha.Append(data,at,0);at+=count;}
+    Check(sha.Finish()==Convert.ToHexString(SHA256.HashData(data.AsSpan(3,data.Length-5))).ToLowerInvariant(),"SHA-256 offsets and mixed partial/full blocks "+stride);
+}
+var completedHash=new Sha256();completedHash.Finish();
+Reject(()=>completedHash.Append(new byte[64],0,64),"finished hash rejects more input");
+Reject(()=>completedHash.Finish(),"hash finalization remains single use");
 Check(Enumerable.Range(0,7).Select(ConsoleText.Dots).SequenceEqual(new[]{0,1,3,7,6,4,0}),"dots appear and disappear left to right");
 Check(ConsoleText.Transfer(1572864,10485760)=="1.5 MiB / 10.0 MiB","binary MiB progress units");
 Check(ConsoleText.Percent(999,1000)==99&&ConsoleText.Percent(1200,1000)==100&&ConsoleText.Percent(-1,1000)==0,"bounded exact download percentage");
