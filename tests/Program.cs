@@ -6,6 +6,20 @@ using Dolphin.Timing;
 int checks=0;
 void Check(bool value,string name){checks++;if(!value)throw new Exception(name);}
 void Reject(Action action,string name){bool rejected=false;try{action();}catch(Exception){rejected=true;}Check(rejected,name);}
+Check(ConsoleText.Speed(0)=="0.0 kb/s"&&ConsoleText.Speed(800000)=="800.0 kb/s","sub-megabit speed uses decimal kilobits");
+Check(ConsoleText.Speed(999999)=="999.9 kb/s"&&ConsoleText.Speed(1000000)=="1.0 Mb/s","unit changes at exactly one megabit before display rounding");
+Check(ConsoleText.Speed(1600000)=="1.6 Mb/s"&&ConsoleText.Speed(99999999)=="99.9 Mb/s"&&ConsoleText.Speed(100000000)=="100.0 Mb/s","megabit speeds retain one decimal across the BBA link range");
+var meter=new DownloadSpeed();
+meter.Update(false,0,0);Check(meter.Text=="","speed is hidden outside transfer");
+meter.Update(true,100000,0);Check(meter.Text=="0.0 kb/s","first active frame takes a baseline");
+meter.Update(true,125000,250000);Check(meter.Text=="0.0 kb/s","short frame intervals do not recalculate speed");
+meter.Update(true,150000,500000);Check(meter.Text=="800.0 kb/s","half-second sample measures byte delta in bits");
+meter.Update(true,250000,1000000);Check(meter.Text=="1.6 Mb/s","recent rate responds to increased download speed");
+meter.Update(true,250000,1500000);Check(meter.Text=="0.0 kb/s","stalled downloads decay to zero");
+meter.Update(false,250000,1600000);Check(meter.Text=="","completion, cancellation and failure hide the rate");
+meter.Update(true,0,2000000);meter.Update(true,100000,2500000);Check(meter.Text=="1.6 Mb/s","a new transfer does not inherit prior bytes or time");
+meter.Update(true,0,2600000);Check(meter.Text=="0.0 kb/s","a restarted byte counter resets the sampling window");
+meter.Update(true,0,100);Check(meter.Text=="0.0 kb/s","clock resets cannot produce a negative rate");
 foreach(string launchTarget in new[]{"gcloader:/Games/Café 猫/AnimalTown-0.14.0.nkit.iso","gcloader:/renamed.GCM"}){
     var arguments=SwissLaunch.Arguments("gcloader:/renamed Swiss.DOL",launchTarget);
     Check(arguments.SequenceEqual(new[]{"gcloader:/renamed Swiss.DOL","Autoload=gcldr:/"+launchTarget.Substring(10),"AutoBoot=Yes","BS2Boot=No","Prefer Clean Boot=No"}),"Swiss launches new or unchanged images without a game selection prompt");

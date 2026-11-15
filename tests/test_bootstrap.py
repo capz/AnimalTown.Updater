@@ -45,7 +45,7 @@ def main():
     def xml(path):return escape(str(path),{'"':'&quot;'})
     project=work/"BootstrapAot.csproj"
     production=[path for path in sorted((ROOT/"src").glob("*.cs"))
-                if path.name not in ("Program.cs","UpdaterConsole.cs","ConsoleText.cs")]
+                if path.name not in ("Program.cs","UpdaterConsole.cs","ConsoleText.cs","DownloadSpeed.cs")]
     project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType>'
         '<TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems>'
         '<Nullable>enable</Nullable><Optimize>true</Optimize></PropertyGroup><ItemGroup>'

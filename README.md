@@ -15,6 +15,18 @@ still the image loader; its own startup or error screens can appear, and holding
 B retains Swiss's intentional autoboot override. This restarts the game; it does
 not restore the previous process's live memory.
 
+## Live download speed
+
+While the transfer phase is active, its stage header shows recent payload
+throughput, sampled every half second from the byte counter and monotonic clock.
+Rates below 1,000,000 bits/s use `kb/s`; rates from 1 Mbit/s use `Mb/s`, including
+the BBA's 100 Mbit/s boundary. Units are decimal bits, not bytes: 200 kB/s is
+`1.6 Mb/s`. One decimal is truncated after selecting the unit. A stalled sample
+shows zero; verification, cancellation and errors hide the speed immediately.
+This measures delivered payload progress, including network, storage and hashing
+pacing, rather than Ethernet link speed. No extra network reads or per-frame
+rate-string formatting are needed.
+
 ## Download scheduling
 
 The update workflow starts explicitly on the SDK background executor. Its
