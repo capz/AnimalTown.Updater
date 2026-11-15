@@ -6,7 +6,8 @@
   "pairs": 5,
   "digest": "39ffb3ccff2e919629dce169aaece19cf2cde9a2eadeaf0a0215c6e9da45aa7c",
   "compiler_flags": [
-    "-O2",
+    "-O3",
+    "-flto",
     "-g",
     "-fno-strict-aliasing",
     "-ffunction-sections",
@@ -15,18 +16,18 @@
   "scope": "Host native AOT SHA CPU phase; not GameCube throughput",
   "samples_us": {
     "Before": [
-      4319,
-      4139,
-      4586,
-      4379,
-      4645
+      3741,
+      5346,
+      4101,
+      4208,
+      3469
     ],
     "After": [
-      3246,
-      3727,
-      3444,
-      3643,
-      3387
+      10324,
+      6910,
+      2713,
+      2915,
+      2954
     ]
   }
 }

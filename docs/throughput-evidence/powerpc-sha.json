@@ -6,7 +6,8 @@
   "pairs": 5,
   "digest": "39ffb3ccff2e919629dce169aaece19cf2cde9a2eadeaf0a0215c6e9da45aa7c",
   "compiler_flags": [
-    "-O2",
+    "-O3",
+    "-flto",
     "-g",
     "-fno-strict-aliasing",
     "-ffunction-sections",
@@ -15,20 +16,20 @@
   "scope": "Dolphin emulated PowerPC guest-clock SHA phase; no BBA, TLS or SD throughput measured",
   "samples_us": {
     "Before": [
-      162901,
-      162902,
-      162903,
-      162904,
-      162905
+      159148,
+      159149,
+      159150,
+      159151,
+      159153
     ],
     "After": [
-      124229,
-      124230,
-      124231,
-      124232,
-      124233
+      120602,
+      120604,
+      120605,
+      120606,
+      120608
     ]
   },
-  "dol_sha256": "3a7ee116e8daba8fea8abc3dc19dd4d04ed8d5a95fccc5019be599bf01913447",
+  "dol_sha256": "75fd2931cc2aa80563ff43cb2e0c111ba96c95f8ed1aae314488c6432573e4fc",
   "emulator": "Dolphin [master] 2503"
 }
