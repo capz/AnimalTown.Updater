@@ -142,19 +142,30 @@ foreach(string url in new[]{published.Url.Replace("/AnimalTown-0.11.24%2B1cc478a
 string[] Request(string path,string version="0.11.24")=>new[]{"dvd:/animal-town-updater.dol",LaunchRequest.Protocol,path,version};
 var discoveryRequest=LaunchRequest.Parse(new[]{"dvd:/animal-town-updater.dol",LaunchRequest.DiscoveryProtocol,"0.11.24+abcdef123456"});
 Check(discoveryRequest.Image==""&&discoveryRequest.Version=="0.11.24+abcdef123456","discovery handoff needs only running identity, not an image mapping");
-foreach(string[] arguments in new[]{new[]{"updater.dol",LaunchRequest.DiscoveryProtocol},new[]{"updater.dol",LaunchRequest.DiscoveryProtocol,"0.11.24","extra"},new[]{"updater.dol",LaunchRequest.DiscoveryProtocol,"not-a-version"},new[]{"updater.dol","--animaltown-update=3","0.11.24"}})
+var discRequest=LaunchRequest.Parse(new[]{"dvd:/animal-town-updater.dol",LaunchRequest.DiscVersionProtocol,"0.22.0"});
+Check(discRequest.Image==""&&discRequest.DownloadPath("AnimalTown-0.23.0.nkit.iso")=="gcloader:/games/AnimalTown-0.23.0.nkit.iso","disc-version handoff installs the published basename in /games without a volume scan");
+foreach(string version in new[]{"0.22.0","0.22.0+0123456789ab","2147483647.2.3"}){
+    using var input=new VersionStream(Encoding.ASCII.GetBytes(version),1);
+    Check(IsoVersion.Read(input)==version,"bounded version file read handles short reads and retains exact build identity");
+}
+foreach(byte[] bytes in new[]{Array.Empty<byte>(),Encoding.ASCII.GetBytes("0.22.0\n"),Encoding.ASCII.GetBytes(" 0.22.0"),Encoding.ASCII.GetBytes("v0.22.0"),new byte[]{239,187,191,48,46,50,50,46,48},new byte[65],Encoding.ASCII.GetBytes("2147483648.0.0")}){
+    Reject(()=>{using var input=new MemoryStream(bytes);IsoVersion.Read(input);},"version file rejects extra bytes, invalid identities, BOMs and oversized contents");
+}
+Reject(()=>{using var input=new VersionStream(Encoding.ASCII.GetBytes("0.22.0"),1,20);IsoVersion.Read(input);},"truncated ISO version files cannot use a partial identity");
+Check(ReleaseInfo.NeedsStableUpdate("0.22.0+0123456789ab","0.23.0")&&!ReleaseInfo.NeedsStableUpdate("0.22.0+0123456789ab","0.22.0")&&!ReleaseInfo.NeedsStableUpdate("0.24.0","0.23.0"),"release checks compare the launched numeric version without downgrading review or newer discs");
+foreach(string[] arguments in new[]{new[]{"updater.dol",LaunchRequest.DiscoveryProtocol},new[]{"updater.dol",LaunchRequest.DiscoveryProtocol,"0.11.24","extra"},new[]{"updater.dol",LaunchRequest.DiscoveryProtocol,"not-a-version"},new[]{"updater.dol","--animaltown-update=4","0.11.24"}})
     Reject(()=>LaunchRequest.Parse(arguments),"discovery handoff rejects missing, extra and unsupported arguments");
 foreach(string path in new[]{"gcloader:/My Town.iso","gcloader:/Games/Animal Town/AnimalTown-0.11.24.nkit.iso","gcloader:/Games/Autumn.GCM","gcloader:/街/Forêt 🦊.nkit.iso"}){
     var request=LaunchRequest.Parse(Request(path));
     Check(request.Image==path&&request.Backup==path+".bak"&&request.Marker==path+".update","a launch request preserves the actual root, subdirectory, spaced or Unicode image name");
     Check(request.Directory+path.Substring(path.LastIndexOf('/')+1)==path,"directory paths preserve the exact target");
-    Check(request.Root=="gcloader:/"&&request.DownloadPath(mainRelease.Name)==request.Directory+".animaltown-update/"+mainRelease.Name,"updater settings stay at volume root while staging follows the image directory");
+    Check(request.Root=="gcloader:/"&&request.DownloadPath(mainRelease.Name)==LaunchRequest.GamesDirectory+mainRelease.Name,"legacy launch paths cannot redirect the fixed /games destination");
     request.VerifyInstalledVersion("0.11.24");Reject(()=>request.VerifyInstalledVersion("0.11.25"),"a changed installed identity is refused before replacement");
 }
 foreach(string[] arguments in new[]{Array.Empty<string>(),new[]{"updater.dol"},new[]{"updater.dol",LaunchRequest.Protocol,"gcloader:/Town.iso"},new[]{"updater.dol",LaunchRequest.Protocol,"gcloader:/Town.iso","0.11.24","extra"},new[]{"updater.dol","--animaltown-update=2","gcloader:/Town.iso","0.11.24"},new[]{"",LaunchRequest.Protocol,"gcloader:/Town.iso","0.11.24"}})Reject(()=>LaunchRequest.Parse(arguments),"missing, extra or unsupported request arguments never guess a target");
 foreach(string path in new[]{"AnimalTown.iso","/AnimalTown.iso","dvd:/AnimalTown.iso","sd:/AnimalTown.iso","carda:/AnimalTown.iso","gcldr:/AnimalTown.iso","gcloader:Town.iso","gcloader:/","gcloader://Town.iso","gcloader:/games/../Town.iso","gcloader:/./Town.iso","gcloader:/games//Town.iso","gcloader:/games/Town.iso/","gcloader:/Town.iso\0","gcloader:/Town\n.iso","gcloader:/Town\\name.iso","gcloader:/Town=AutoBoot.iso","gcloader:/Town?.iso","gcloader:/Town*.iso","gcloader:/Town\".iso","gcloader:/Town<.iso","gcloader:/Town>.iso","gcloader:/Town|.iso","gcloader:/games /Town.iso","gcloader:/games./Town.iso","gcloader:/Town.iso ","gcloader:/Town.iso.","gcloader:/Town.dol","gcloader:/Town.iso.bak","gcloader:/Town.nkit","gcloader:/bad\ud800.iso","gcloader:/bad\udc00.iso","gcloader:/"+new string('a',245)+".iso","gcloader:/"+new string('界',250)+"/"+new string('界',100)+"/Town.iso"})Reject(()=>LaunchRequest.Parse(Request(path)),"noncanonical, wrong-device, unsafe or oversized targets are rejected");
 var colliding=LaunchRequest.Parse(Request("gcloader:/Games/AnimalTown-0.11.24.nkit.iso","0.11.23"));
-Check(colliding.DownloadPath(mainRelease.Name)!=colliding.Image&&colliding.DownloadPath(mainRelease.Name).EndsWith("/"+mainRelease.Name),"published release staging cannot alias an installed image with the release filename");
+Check(colliding.DownloadPath(mainRelease.Name)=="gcloader:/games/"+mainRelease.Name,"canonical published destination does not inherit the old image's directory spelling");
 foreach(string name in new[]{"../AnimalTown-0.11.24.nkit.iso","AnimalTown-../Town.nkit.iso","gcloader:/AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24.iso","AnimalTown-0.11.24.nkit.iso.bak"})Reject(()=>colliding.DownloadPath(name),"release download names cannot escape the staging directory");
 const string image="AnimalTown.iso",download="AnimalTown-0.14.9.abcdef123456.nkit.iso";
 for(int failure=1;failure<=6;failure++){
@@ -416,6 +427,15 @@ if(args.Length==2&&args[0]=="--swiss-directory"){
     Console.WriteLine("Live image selected: "+live.Version+" / "+live.Path);
 }else if(args.Length==1){string liveJson=File.ReadAllText(args[0]);var live=liveJson.TrimStart().StartsWith("{")?ReleaseInfo.ParseStable(liveJson):ReleaseInfo.Parse(liveJson);Check(live.Name.EndsWith(".nkit.iso"),"actual GitHub release metadata");Console.WriteLine("Live release parsed: "+live.Name);}
 Console.WriteLine(checks+" updater checks passed: stable discovery, published filenames, verified selection before deletion, request paths, SHA-256 and interrupted installation.");
+
+sealed class VersionStream : MemoryStream
+{
+    private readonly int quantum;
+    private readonly long declared;
+    internal VersionStream(byte[] bytes,int quantum,long declared=-1):base(bytes){this.quantum=quantum;this.declared=declared<0?bytes.Length:declared;}
+    public override long Length=>declared;
+    public override int Read(byte[] bytes,int offset,int count)=>base.Read(bytes,offset,Math.Min(count,quantum));
+}
 
 sealed class FakeFiles : IInstallFiles
 {

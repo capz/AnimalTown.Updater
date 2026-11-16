@@ -6,7 +6,7 @@ namespace AnimalTown.Updater;
 
 internal static class UpdateWorker
 {
-    internal static Task<PreparedDol> Run(CancellationToken token)
+    internal static Task<PreparedDol?> Run(CancellationToken token)
     {
         var worker=new Work(token);
         // Use the pinned SDK's Action overload explicitly. An awaited dummy
@@ -18,8 +18,8 @@ internal static class UpdateWorker
     private sealed class Work
     {
         private readonly CancellationToken token;
-        private Task<PreparedDol>? update;
-        internal readonly TaskCompletionSource<PreparedDol> Completion=new TaskCompletionSource<PreparedDol>();
+        private Task<PreparedDol?>? update;
+        internal readonly TaskCompletionSource<PreparedDol?> Completion=new TaskCompletionSource<PreparedDol?>();
         internal Work(CancellationToken token){this.token=token;}
         internal void Start()
         {

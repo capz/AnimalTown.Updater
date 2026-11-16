@@ -38,7 +38,7 @@ internal static class Updater
 {
     internal static int Steps;
     internal static bool Fail;
-    internal static async Task<PreparedDol> Run(CancellationToken token)
+    internal static async Task<PreparedDol?> Run(CancellationToken token)
     {
         if(Scheduler.IsApplicationThread)throw new Exception("Updater started on UI executor");
         if(Fail)throw new System.IO.IOException("Fixture failure");

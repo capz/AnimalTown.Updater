@@ -12,7 +12,7 @@
  * The runner checks that shape before inserting nonallocating observations. */
 typedef struct Block {uint32_t size;uint8_t marked,free;uint16_t reserved;struct Block *next;} Block;
 static size_t peak_used,total_allocated,allocations,peak_post_gc_live;
-static size_t entries,opens,header_bytes,highest_header_bytes,highest_entry_index,swiss_probe_bytes;
+static size_t entries,opens,iso_opens,header_bytes,highest_header_bytes,highest_entry_index,swiss_probe_bytes;
 static int highest_handle,swiss_probe_handle;
 static bool in_scan_read,fault_observed;
 static unsigned injected;
@@ -28,14 +28,27 @@ struct dirent *__wrap_readdir(DIR *directory)
 #endif
 DndString *dnd_scan_dir_next(DndManagedHeap *heap,int handle,int kind)
 {
+    if(getenv("DND_SCAN_VERSION_FILE_MODE")){
+        assert(!dnd_storage_is_mounted(3)&&dnd_storage_is_mounted(6));
+        if(entries==0)assert(dnd_storage_auto_defrag_enabled()&&dnd_storage_auto_defrag_min_size()==65536);
+    }
     in_scan_read=true;DndString *path=dnd_fs_dir_next(heap,handle,kind);in_scan_read=false;
     if(path)entries++;
     return path;
 }
 int dnd_scan_open(DndString *path,int mode,int access,int share)
 {
+    static const char version_suffix[]="/version.md";
+    bool version=path&&path->length>=sizeof(version_suffix)-1;
+    for(size_t i=0;version&&i<sizeof(version_suffix)-1;i++)
+        if(path->chars[path->length-(sizeof(version_suffix)-1)+i]!=(unsigned char)version_suffix[i])version=false;
+    if(version&&getenv("DND_SCAN_VERSION_FILE_MODE"))assert(dnd_storage_is_mounted(3)&&!dnd_storage_is_mounted(6));
     static const char suffix[]="/boot.GCM";
     int handle=dnd_fs_open(path,mode,access,share);opens++;
+    if(path&&path->length>=4){
+        uint16_t *end=path->chars+path->length-4;
+        if(end[0]=='.'&&(((end[1]|32)=='i'&&(end[2]|32)=='s'&&(end[3]|32)=='o')||((end[1]|32)=='g'&&(end[2]|32)=='c'&&(end[3]|32)=='m')))iso_opens++;
+    }
     bool highest=path&&path->length>=sizeof(suffix)-1;
     for(size_t i=0;highest&&i<sizeof(suffix)-1;i++)
         if(path->chars[path->length-(sizeof(suffix)-1)+i]!=(unsigned char)suffix[i])highest=false;
@@ -104,10 +117,15 @@ int main(int argc,char **argv)
         free(memory);return 1;
     }
     if(getenv("DND_SCAN_NATIVE_MEMORY_FAULT")){
-        assert(injected==1&&fault_observed&&entries==0&&opens==0&&header_bytes==0&&peak_used<128*1024);
+        assert(injected==1&&fault_observed&&entries==0&&opens==(getenv("DND_SCAN_VERSION_FILE_MODE")?1u:0u)&&header_bytes==(getenv("DND_SCAN_VERSION_FILE_MODE")?6u:0u)&&peak_used<128*1024);
         puts("Native ENOMEM fault: real storage mapping, retained managed Message, low heap, phase-before-transfer and handle cleanup passed");
     }else{
-        assert(!injected&&!fault_observed&&highest_header_bytes==0x440);
+        assert(!injected&&!fault_observed);
+        if(getenv("DND_SCAN_VERSION_FILE_MODE")){
+            assert(iso_opens==0&&highest_header_bytes==0&&highest_entry_index==0);
+            puts("Native version file: zero installed ISO/GCM opens; renamed/newer images never choose the running version");
+        }
+        else assert(highest_header_bytes==0x440);
         setting=getenv("DND_SCAN_EXPECT_ENTRIES");if(setting)assert(entries==(size_t)strtoull(setting,NULL,10));
         setting=getenv("DND_SCAN_EXPECT_IMAGE_ENTRIES");if(setting)assert(highest_entry_index<=(size_t)strtoull(setting,NULL,10));
         setting=getenv("DND_SCAN_EXPECT_SWISS_BYTES");if(setting)assert(swiss_probe_bytes==(size_t)strtoull(setting,NULL,10));
