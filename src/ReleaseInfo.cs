@@ -9,7 +9,15 @@ internal sealed class ReleaseInfo
     internal string Version="",Name="",Url="",Digest="";
     internal int Size;
     internal const int MaximumFeedBytes=2048;
-    internal const string LatestFeedUrl="https://github.com/capz/AnimalTown/releases/latest/download/update.json";
+    internal const int MaximumMetadataBytes=32768,MaximumAssets=64;
+    internal const string LatestMetadataUrl="https://api.github.com/repos/capz/AnimalTown/releases/latest";
+    internal static ReleaseInfo ParseReleaseMetadata(string json)
+    {
+        if(json==null||json.Length>MaximumMetadataBytes)throw new FormatException("Release metadata exceeds 32 KiB limit");
+        var release=ParseStable(json);
+        if(release.Size>1459978240)throw new IOException("Update ISO exceeds GameCube disc size");
+        return release;
+    }
     internal static ReleaseInfo ParseUpdateFeed(string json)
     {
         if(json==null||json.Length>MaximumFeedBytes)throw new FormatException("Update feed exceeds 2 KiB limit");
@@ -31,6 +39,7 @@ internal sealed class ReleaseInfo
             else if(key=="assets"){
                 if(r.TokenType!=JsonTokenType.StartArray)throw new FormatException();
                 while(r.Read()&&r.TokenType!=JsonTokenType.EndArray){
+                    if(assets.Count>=MaximumAssets)throw new IOException("Release asset limit exceeded");
                     if(r.TokenType!=JsonTokenType.StartObject)throw new FormatException();var asset=new ReleaseInfo();
                     while(r.Read()&&r.TokenType!=JsonTokenType.EndObject){
                         string property=r.Value;if(r.TokenType!=JsonTokenType.PropertyName||!r.Read())throw new FormatException();
