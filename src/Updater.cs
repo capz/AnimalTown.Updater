@@ -55,8 +55,9 @@ internal static class Updater
             await NetworkRuntime.StartAsync(new NetworkOptions(),token);await ConfigureTls(token);
             string target="";
             using(var http=new HttpClient()){
-                http.MaximumResponseBytes=ReleaseInfo.MaximumFeedBytes;http.MaximumStreamBytes=int.MaxValue;http.StreamReadBufferSize=16384;
-                http.DefaultRequestHeaders.Add("User-Agent","AnimalTown-Updater/4");http.DefaultRequestHeaders.Add("Accept","*/*");
+                http.MaximumResponseBytes=ReleaseInfo.MaximumMetadataBytes;http.MaximumStreamBytes=int.MaxValue;http.StreamReadBufferSize=16384;
+                http.DefaultRequestHeaders.Add("User-Agent","AnimalTown-Updater/5");http.DefaultRequestHeaders.Add("Accept","application/vnd.github+json");
+                http.DefaultRequestHeaders.Add("X-GitHub-Api-Version","2022-11-28");
                 Phase=2;Status="Checking the latest numbered release";
                 var release=await ReadStableRelease(http,token);
                 if(ReleaseInfo.NeedsStableUpdate(installedVersion,release.Version)){
@@ -100,11 +101,11 @@ internal static class Updater
     }
     private static async Task<ReleaseInfo> ReadStableRelease(HttpClient http,CancellationToken token)
     {
-        token.ThrowIfCancellationRequested();Operation="Read compact stable update feed";
-        CurrentPath=ReleaseInfo.LatestFeedUrl;
+        token.ThrowIfCancellationRequested();Operation="Read bounded stable release metadata";
+        CurrentPath=ReleaseInfo.LatestMetadataUrl;
         using var metadata=await http.GetAsync(CurrentPath,HttpCompletionOption.ResponseContentRead,token);
         metadata.EnsureSuccessStatusCode();
-        return ReleaseInfo.ParseUpdateFeed(await metadata.Content.ReadAsStringAsync());
+        return ReleaseInfo.ParseReleaseMetadata(await metadata.Content.ReadAsStringAsync());
     }
     private static async Task Download(HttpClient http,ReleaseInfo release,string destination,CancellationToken token)
     {

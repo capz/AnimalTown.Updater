@@ -85,23 +85,21 @@ Renaming an ISO does not affect the mounted file. A missing, invalid, oversized
 or mismatched version file fails before writable storage or network setup.
 The updater does not fall back to an ISO scan or `image-path.txt`.
 
-The updater reads
-[`releases/latest/download/update.json`](https://github.com/capz/AnimalTown/releases/latest/download/update.json),
-a maximum 2 KiB document published with the numbered main release. It contains
-only its tag and exact ISO basename, HTTPS URL, size and SHA-256. GitHub's latest
-regular release excludes hash-suffixed PR prereleases; the updater also validates
-the numeric tag and exact repository/tag/asset URL itself. An equal or newer
-running numeric version is kept, including across the old patch numbering and
-new automatically incremented minor numbering (`0.11.38` to `0.12.0`).
+The updater reads GitHub's `/repos/capz/AnimalTown/releases/latest` API once,
+with a 32 KiB HTTP response cap before decoding and at most 64 asset records.
+The release workflow publishes only four binary ZIP/ISO assets and limits its
+public notes to 1 KiB; detailed notes and reports live inside `-depot.zip`.
+This keeps metadata within the updater's existing 1 MiB heap and avoids the old
+4,329-character release-note string failure. It validates the numeric tag,
+exact ISO basename, HTTPS repository/tag/asset URL, size and SHA-256. Missing,
+oversized or malformed metadata fails before downloading or replacing images.
+Equal/newer running numeric versions are kept; debug releases are rejected.
 
-The former releases API scan buffered entire pages and parsed eligible releases
-twice. Its SDK string decoder also materialized skipped release notes; a 4,329-
-character note exceeded the 4,096-character string limit. The compact feed
-contains no notes, author objects or unrelated assets, is parsed once, and has
-a 2 KiB HTTP buffered-response cap before JSON decoding. There is no fallback to
-the large releases API. A missing, malformed or oversized feed fails before any
-download or image replacement. Requires an AnimalTown main release that publishes
-the compact feed (starting at `0.12.0`).
+No loose `update.json` release asset is required. Older updaters that fetch
+`releases/latest/download/update.json` need one manual ISO upgrade to the first
+release containing this updater. Memory-card save formats are unchanged. The
+old compact-feed parser remains covered for existing data; it is not used for
+new release discovery.
 
 The ISO streams into checked contiguous storage with a fixed 32 KiB coalescing workspace and 16 KiB reads/writes. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
 must match before activation. The new ISO keeps GitHub's filename in `/games`;

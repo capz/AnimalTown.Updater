@@ -101,6 +101,14 @@ var reviewRelease=ReleaseInfo.Parse(json.Replace("0.14.9.abcdef123456","0.11.24+
 Check(mainRelease.Name=="AnimalTown-0.11.24.nkit.iso"&&reviewRelease.Name=="AnimalTown-0.11.24+abcdef123456.nkit.iso","current numeric and review release assets are selected by their exact identities");
 string stableJson=json.Trim()[1..^1].Replace("0.14.9.abcdef123456","0.11.24").Replace("\"prerelease\":true","\"prerelease\":false");
 var stable=ReleaseInfo.ParseStable(stableJson);
+Check(ReleaseInfo.ParseReleaseMetadata(stableJson).Name==stable.Name,"bounded release API preserves exact ISO selection without a loose update feed");
+Check(ReleaseInfo.LatestMetadataUrl=="https://api.github.com/repos/capz/AnimalTown/releases/latest","release discovery uses the published stable API endpoint");
+Reject(()=>ReleaseInfo.ParseReleaseMetadata(new string(' ',ReleaseInfo.MaximumMetadataBytes+1)),"release API metadata is bounded before parsing");
+Reject(()=>ReleaseInfo.ParseReleaseMetadata(stableJson.Replace("\"draft\":false","\"draft\":true")),"release API rejects drafts");
+Reject(()=>ReleaseInfo.ParseReleaseMetadata(stableJson.Replace("0.11.24","0.11.24+abcdef123456")),"release API rejects debug builds");
+Reject(()=>ReleaseInfo.ParseReleaseMetadata(stableJson.Replace("sha256:","sha512:")),"release API requires SHA-256");
+Reject(()=>ReleaseInfo.ParseReleaseMetadata(stableJson.Replace("https://github.com/capz/AnimalTown/","https://example.com/")),"release API keeps the exact HTTPS asset origin");
+Reject(()=>ReleaseInfo.ParseReleaseMetadata(stableJson.Replace("\"assets\":[","\"assets\":["+string.Concat(Enumerable.Repeat("{},",ReleaseInfo.MaximumAssets)))),"release asset count is bounded before allocating another object");
 var compact=ReleaseInfo.ParseUpdateFeed(stableJson.Replace("0.11.24","0.12.0"));
 Check(compact.Version=="0.12.0"&&ReleaseInfo.NeedsStableUpdate("0.11.38",compact.Version),"new minor release feed upgrades old patch-numbered installations");
 Reject(()=>ReleaseInfo.ParseUpdateFeed(new string(' ',2049)),"oversized metadata rejected before JSON allocation");
