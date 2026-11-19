@@ -6,10 +6,11 @@ namespace AnimalTown.Updater;
 
 internal sealed class ReleaseInfo
 {
-    internal string Version="",Name="",Url="",Digest="";
+    internal string Version="",Name="",Url="",Digest="",Summary="";
     internal int Size;
     internal const int MaximumFeedBytes=2048;
     internal const int MaximumMetadataBytes=32768,MaximumAssets=64;
+    private const int MaximumSummaryLength=220;
     internal const string LatestMetadataUrl="https://api.github.com/repos/capz/AnimalTown/releases/latest";
     internal static ReleaseInfo ParseReleaseMetadata(string json)
     {
@@ -30,12 +31,13 @@ internal sealed class ReleaseInfo
     private static ReleaseInfo ParseDocument(string json,bool stable)
     {
         var r=new JsonReader(json);if(!stable)Need(r,JsonTokenType.StartArray);Need(r,JsonTokenType.StartObject);
-        string tag="";bool draft=true;var assets=new Dolphin.Collections.List<ReleaseInfo>();
+        string tag="",summary="";bool draft=true;var assets=new Dolphin.Collections.List<ReleaseInfo>();
         while(r.Read()&&r.TokenType!=JsonTokenType.EndObject){
             if(r.TokenType!=JsonTokenType.PropertyName)throw new FormatException("Invalid GitHub release");string key=r.Value;
             if(!r.Read())throw new FormatException();
             if(key=="tag_name")tag=Text(r);
             else if(key=="draft")draft=r.TokenType!=JsonTokenType.False;
+            else if(key=="body"&&r.TokenType==JsonTokenType.String)summary=ReadSummary(r.Value);
             else if(key=="assets"){
                 if(r.TokenType!=JsonTokenType.StartArray)throw new FormatException();
                 while(r.Read()&&r.TokenType!=JsonTokenType.EndArray){
@@ -59,7 +61,27 @@ internal sealed class ReleaseInfo
         }
         if(result==null||result.Size<0x500||!AssetUrl(result.Url,tag,result.Name)||!result.Digest.StartsWith("sha256:")||result.Digest.Length!=71)throw new IOException("Release lacks a verified NKit ISO");
         for(int i=7;i<result.Digest.Length;i++)if(Hex(result.Digest[i])<0)throw new IOException("Invalid release SHA-256");
-        result.Digest=result.Digest.Substring(7).ToLowerInvariant();result.Version=version;return result;
+        result.Digest=result.Digest.Substring(7).ToLowerInvariant();result.Version=version;result.Summary=summary;return result;
+    }
+    private static string ReadSummary(string body)
+    {
+        const string heading="## What's new";
+        for(int at=0;at<body.Length;){
+            int end=at;while(end<body.Length&&body[end]!='\n')end++;
+            int length=end-at;if(length>0&&body[end-1]=='\r')length--;
+            if(length==heading.Length&&body.Substring(at,length)==heading){
+                int start=end+1;
+                while(start<body.Length&&(body[start]=='\n'||body[start]=='\r'))start++;
+                int stop=start;
+                while(stop<body.Length&&body[stop]!='\n'&&body[stop]!='\r'){
+                    if(stop-start==MaximumSummaryLength||body[stop]<' '||body[stop]>'~')return "";
+                    stop++;
+                }
+                return start<body.Length?body.Substring(start,stop-start).Trim():"";
+            }
+            at=end+1;
+        }
+        return "";
     }
     internal static bool NeedsUpdate(string local,string latest)
     {
