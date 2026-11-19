@@ -274,6 +274,9 @@ text, a vertically centered status block and a 48-pixel safe area on every side.
 Both native SD readback and SHA-256 verification yield to the UI and honor
 cancellation before publication. Transfer progress displays both percent and binary MiB received/total. Loading
 dots fill from left to right, then clear in the same order on a repeating cycle.
+When a newer release supplies a **What's new** summary, up to four lines appear
+above its progress bar. The summary comes from the same release metadata as
+the version and ISO information.
 Failures retain the stopped phase and last operation, with exception
 classification even when the native message is empty, plus the relevant path or
 native result when available. Diagnostic text wraps inside the safe area and

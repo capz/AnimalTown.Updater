@@ -102,6 +102,18 @@ Check(mainRelease.Name=="AnimalTown-0.11.24.nkit.iso"&&reviewRelease.Name=="Anim
 string stableJson=json.Trim()[1..^1].Replace("0.14.9.abcdef123456","0.11.24").Replace("\"prerelease\":true","\"prerelease\":false");
 var stable=ReleaseInfo.ParseStable(stableJson);
 Check(ReleaseInfo.ParseReleaseMetadata(stableJson).Name==stable.Name,"bounded release API preserves exact ISO selection without a loose update feed");
+string WithReleaseBody(string body)=>stableJson.Insert(1,"\"body\":"+System.Text.Json.JsonSerializer.Serialize(body)+",");
+const string releaseSummary="Sunrise and sunset follow your town's location.";
+foreach(string newline in new[]{"\n","\r\n"}){
+    var described=ReleaseInfo.ParseReleaseMetadata(WithReleaseBody("AnimalTown 0.11.24 from this build."+newline+newline+"## What's new"+newline+newline+releaseSummary+newline+newline+"Download the verified ISO."));
+    Check(described.Summary==releaseSummary&&described.Name==stable.Name&&described.Digest==stable.Digest,"release summary preserves its text and the validated ISO identity");
+}
+Check(ReleaseInfo.ParseReleaseMetadata(stableJson).Summary=="","older releases without a summary still update");
+Check(ReleaseInfo.ParseReleaseMetadata(WithReleaseBody("## Notes\n\nLong explanatory release notes.")).Summary=="","unrelated release prose is not a console summary");
+foreach(string bad in new[]{new string('w',221),"Clock\tcontrol","Non-ASCII \u03A9", ""}){
+    Check(ReleaseInfo.ParseReleaseMetadata(WithReleaseBody("## What's new\n\n"+bad)).Summary=="","unsupported optional release summaries do not block verified updates");
+}
+Check(ReleaseInfo.ParseReleaseMetadata(WithReleaseBody("## What's new\n\n"+new string('x',220))).Summary.Length==220,"release summary accepts the publication limit");
 Check(ReleaseInfo.LatestMetadataUrl=="https://api.github.com/repos/capz/AnimalTown/releases/latest","release discovery uses the published stable API endpoint");
 Reject(()=>ReleaseInfo.ParseReleaseMetadata(new string(' ',ReleaseInfo.MaximumMetadataBytes+1)),"release API metadata is bounded before parsing");
 Reject(()=>ReleaseInfo.ParseReleaseMetadata(stableJson.Replace("\"draft\":false","\"draft\":true")),"release API rejects drafts");
