@@ -19,7 +19,7 @@ still the image loader; its own startup or error screens can appear, and holding
 B retains Swiss's intentional autoboot override. This restarts the game; it does
 not restore the previous process's live memory.
 
-## Live download speed
+## Live download speed and time remaining
 
 While the transfer phase is active, its stage header shows recent payload
 throughput, sampled every half second from the byte counter and monotonic clock.
@@ -30,6 +30,11 @@ shows zero; verification, cancellation and errors hide the speed immediately.
 This measures delivered payload progress, including network, storage and hashing
 pacing, rather than Ethernet link speed. No extra network reads or per-frame
 rate-string formatting are needed.
+
+Below the progress bar, the updater estimates how much download time remains
+using a smoothed rate from the same samples. The estimate appears once bytes
+start arriving and clears after 1.5 seconds without progress or when the
+download ends. The screen shows the active stage during verification and restart.
 
 See [throughput limits, measured optimization and next experiments](docs/updater-throughput.md)
 for the BBA/EXI/TCP ceilings and reproducible native comparisons.
