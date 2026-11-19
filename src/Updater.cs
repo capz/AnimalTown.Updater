@@ -20,7 +20,7 @@ internal static class Updater
     internal static string Status="Preparing updater";
     internal static int Phase;
     internal static long DownloadedBytes,TotalBytes;
-    internal static string Artifact="";
+    internal static string Artifact="",ReleaseVersion="",ReleaseSummary="";
     internal static string LaunchImage="";
     internal static async Task<PreparedDol?> Run(CancellationToken token)
     {
@@ -61,6 +61,7 @@ internal static class Updater
                 Phase=2;Status="Checking the latest numbered release";
                 var release=await ReadStableRelease(http,token);
                 if(ReleaseInfo.NeedsStableUpdate(installedVersion,release.Version)){
+                    ReleaseVersion=release.Version;ReleaseSummary=release.Summary;
                     Artifact=release.Name;TotalBytes=release.Size;target=request.DownloadPath(release.Name);
                     Directory.CreateDirectory(LaunchRequest.GamesDirectory);
                     CurrentPath=target;

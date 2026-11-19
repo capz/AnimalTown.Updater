@@ -16,7 +16,8 @@ internal static class Program
         var task=UpdateWorker.Run(cancel.Token);
         while(!task.IsCompleted){
             Controller.Update();if(Controller.GetState(0).B.WasPressed)cancel.Cancel();
-            console.Draw(Updater.Status,true,false,Updater.Phase,Updater.DownloadedBytes,Updater.TotalBytes,Updater.Artifact);
+            console.Draw(Updater.Status,true,false,Updater.Phase,Updater.DownloadedBytes,Updater.TotalBytes,Updater.Artifact,
+                summary:Updater.ReleaseSummary,updateVersion:Updater.ReleaseVersion);
         }
         try{
             using var launch=task.GetAwaiter().GetResult();
