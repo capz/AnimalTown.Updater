@@ -27,7 +27,7 @@ internal sealed class UpdaterConsole : IDisposable
     internal void Draw(string status,bool busy,bool failed,int phase,long received,long total,string artifact,string detail="",string operation="",
         string summary="",string updateVersion="")
     {
-        speed.Update(busy&&!failed&&phase==3,received,Clock.Timestamp);
+        speed.Update(busy&&!failed&&phase==3,received,total,Clock.Timestamp);
         if(status!=cachedStatus||failed!=cachedFailed){cachedStatus=status;cachedFailed=failed;lineCount=ConsoleText.Wrap(status,Width-dotCell*3-10,measure,failed?failureLines:lines);}
         if(operation!=cachedOperation){cachedOperation=operation;operationCount=operation.Length>0?ConsoleText.Wrap(operation,Width,measureDiagnostic,operationLines):0;}
         if(detail!=cachedDetail){cachedDetail=detail;detailCount=detail.Length>0?ConsoleText.Wrap(detail,Width,measureDiagnostic,detailLines):0;}
@@ -84,6 +84,7 @@ internal sealed class UpdaterConsole : IDisposable
             ui.FillRectangle(new RectF(Left,y+43,Width,3),rule);
             if(percent>0)ui.FillRectangle(new RectF(Left,y+43,Width*percent/100,3),ink);
             if(artifact.Length>0)Text(artifact,Left,y+57,11,muted);
+            if(speed.Eta.Length>0)Right(speed.Eta,Left+Width,y+57,11,muted);
         }else Text("GITHUB RELEASES / NKIT IMAGE",Left,y+28,12,muted);
         ui.FillRectangle(new RectF(Left,FooterY,Width,1),rule);
         Text(failed||!busy?"B  EXIT":"B  CANCEL",Left,409,12,muted);Right("GC LOADER / SD",Left+Width,409,12,muted);

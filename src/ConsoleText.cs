@@ -22,6 +22,14 @@ internal static class ConsoleText
         long tenths=bitsPerSecond/(megabits?100000:100);
         return tenths/10+"."+tenths%10+(megabits?" Mb/s":" kb/s");
     }
+    internal static string DownloadEta(long seconds)
+    {
+        string duration;
+        if(seconds>=3600)duration=seconds/3600+"h "+seconds/60%60+"m";
+        else if(seconds>=60)duration=seconds/60+"m "+seconds%60+"s";
+        else duration=seconds+"s";
+        return "About "+duration+" left to download";
+    }
     // Wrap actual proportional IPL advances; hard-break long paths/filenames.
     // The caller supplies a fixed row budget, keeping every glyph in safe area.
     internal static int Wrap(string text,float width,Func<string,float> measure,string[] rows)
