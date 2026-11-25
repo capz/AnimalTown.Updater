@@ -31,8 +31,9 @@ internal static class Program
         bool multi=System.IO.File.Exists("dvd:/multi-destination");
         bool sdOnly=System.IO.File.Exists("dvd:/sd-only");
         bool adaptersOnly=System.IO.File.Exists("dvd:/adapters-only");
+        bool mmce=System.IO.File.Exists("dvd:/libogc2-media");
         string[] expectedRoots=multi?new[]{"gcloader:/","sd:/","cardb:/"}:
-            adaptersOnly?new[]{"sd:/","cardb:/"}:new string[0];
+            adaptersOnly?new[]{"sd:/","cardb:/"}:mmce?new[]{"carda:/","cardb:/"}:new string[0];
         var destinationChoice=new TaskCompletionSource<int>();
         var scan=UpdateWorker.Run(CancellationToken.None,destinationChoice.Task,Task.FromResult(false));
 #else
@@ -48,6 +49,8 @@ internal static class Program
                 if(destinations.Length!=expectedRoots.Length)throw new Exception("Writable destination count is incorrect");
                 for(int i=0;i<destinations.Length;i++)
                     if(destinations[i].Root!=expectedRoots[i])throw new Exception("Writable destination is incorrect");
+                if(mmce&&(destinations[0].Label!="SD2SP1"||!destinations[0].CanBoot||destinations[1].CanBoot))
+                    throw new Exception("libogc2 adapter capabilities were not reflected in the picker");
 #if SCAN_UI
                 console.DrawDestinations(destinations,1);
 #endif
@@ -71,15 +74,21 @@ internal static class Program
             Console.WriteLine("Native enumeration ENOMEM retained before transfer");
             return 0;
         }
-        catch(System.IO.IOException){
-            if(Updater.Operation!="Prepare Swiss launch helper"||Updater.Status!="Finding Swiss on mounted SD cards")throw;
+        catch(System.IO.IOException error){
+            if(mmce){
+                if(error.Message!="Fixture stopped before networking"||Updater.Operation!="Start Broadband Adapter"||Updater.CleanupAvailable)throw;
+            }else if(Updater.Operation!="Prepare Swiss launch helper"||Updater.Status!="Finding Swiss on mounted SD cards")throw;
         }
         VerifyAllocationRestored();
         if(Storage.IsMounted(StorageDevice.GcLoader)||Storage.IsMounted(StorageDevice.SdSerialPort2)||Storage.IsMounted(StorageDevice.SdSlotA)||Storage.IsMounted(StorageDevice.SdSlotB))
             throw new Exception("An SD volume remained mounted after the update stopped");
-        string expectedLabel=adaptersOnly?"SD Gecko (Slot B)":multi||sdOnly?"SD2SP2":"GC Loader SD";
+        string expectedLabel=mmce?"MMCE (Slot B, save only)":adaptersOnly?"SD Gecko (Slot B)":multi||sdOnly?"SD2SP2":"GC Loader SD";
         if(Updater.DestinationLabel!=expectedLabel||destinationChoice.Task.IsCompleted!=(expectedRoots.Length>0))
             throw new Exception("Updater did not use the expected destination");
+        if(mmce){
+            Console.WriteLine("Native updater selected MMCE in save-only mode and skipped the Swiss prerequisite");
+            return 0;
+        }
         var helperDevice=sdOnly||adaptersOnly?StorageDevice.SdSerialPort2:StorageDevice.GcLoader;
         string helperRoot=sdOnly||adaptersOnly?"sd:/":"gcloader:/";
         if(!Storage.Mount(helperDevice))return 17;

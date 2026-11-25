@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using AnimalTown.Updater;
+using Dolphin.Storage;
 using Dolphin.Timing;
 
 int checks=0;
@@ -56,6 +57,15 @@ foreach(var (root,swissRoot) in new[]{("sd:/","sdc:/"),("carda:/","sda:/"),("car
     string destination=LaunchRequest.DownloadPath(root+"games/",asset);
     Check(destination==root+"games/"+asset&&SwissLaunch.Arguments("gcloader:/boot.dol",destination)[1]=="Autoload="+swissRoot+"games/"+asset,
         "the selected SD destination is preserved in the download path and Swiss handoff, even with a separate helper card");
+}
+var slotA=UpdateVolume.Supported.Single(volume=>volume.Device==StorageDevice.SdSlotA);
+var port1=slotA.WithMountedMedia(StorageMedia.SdSerialPort1);
+Check(port1.Label=="SD2SP1"&&port1.CanBoot&&port1.GamesDirectory=="carda:/games/","SD2SP1 uses Swiss's Slot A path with its adapter label");
+foreach(var (device,label) in new[]{(StorageDevice.SdSlotA,"Slot A"),(StorageDevice.SdSlotB,"Slot B"),(StorageDevice.SdSerialPort2,"Serial Port 2")}){
+    var sd=UpdateVolume.Supported.Single(volume=>volume.Device==device);
+    var mmce=sd.WithMountedMedia(StorageMedia.Mmce);
+    Check(mmce.Label=="MMCE ("+label+", save only)"&&!mmce.CanBoot&&mmce.GamesDirectory==sd.GamesDirectory,
+        "MMCE appears at the underlying mount path with a save-only label");
 }
 foreach(var date in new[]{new CalendarTime(2024,1,1,14,0),new CalendarTime(2024,2,29,23,59,59),new CalendarTime(2026,11,14,12,34,56),new CalendarTime(2038,1,18,13,14,7)}){
     long expected=new DateTimeOffset(date.Year,date.Month,date.Day,date.Hour,date.Minute,date.Second,TimeSpan.Zero).ToUnixTimeSeconds();

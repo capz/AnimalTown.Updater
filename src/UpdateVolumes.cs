@@ -31,7 +31,7 @@ internal sealed class UpdateVolumes : IDisposable
                 string games = volume.Root + "games";
                 if (File.Exists(games)) continue;
                 if (Directory.Exists(games)) ProbeWrite(volume.GamesDirectory);
-                writable.Add(volume);
+                writable.Add(volume.WithMountedMedia(Storage.GetMountedMedia(volume.Device)));
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
@@ -66,7 +66,7 @@ internal sealed class UpdateVolumes : IDisposable
         if (swiss != null) return swiss;
         foreach (var volume in mounted)
         {
-            if (volume == preferred) continue;
+            if (volume.Device == preferred.Device) continue;
             swiss = await SwissDiscovery.TryFindAsync(volume.Root, token, reportPath);
             if (swiss != null) return swiss;
         }

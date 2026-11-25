@@ -25,7 +25,7 @@ internal sealed class UpdaterConsole : IDisposable
     private float Measure(string text)=>font.MeasureText(text,scale).X;
     private float MeasureDiagnostic(string text)=>font.MeasureText(text,diagnosticScale).X;
     internal void Draw(string status,bool busy,bool failed,int phase,long received,long total,string artifact,string detail="",string operation="",
-        string summary="",string updateVersion="",bool cleanupEnabled=false,bool cleanupWarning=false,string destination="")
+        string summary="",string updateVersion="",bool cleanupEnabled=false,bool cleanupWarning=false,string destination="",bool cleanupAvailable=true)
     {
         speed.Update(busy&&!failed&&phase==3,received,total,Clock.Timestamp);
         if(status!=cachedStatus||failed!=cachedFailed){cachedStatus=status;cachedFailed=failed;lineCount=ConsoleText.Wrap(status,Width-dotCell*3-10,measure,failed?failureLines:lines);}
@@ -88,7 +88,8 @@ internal sealed class UpdaterConsole : IDisposable
         if(failed||!busy)Text(cleanupWarning?"A  START GAME":"B  EXIT",Left,409,12,muted);
         if(busy&&!failed&&phase<5){
             Text("B  CANCEL",Left,409,12,muted);
-            Right(cleanupEnabled?"X  DELETE OLDER COPIES ON ALL WRITABLE CARDS  [ON]":"X  DELETE OLDER COPIES ON ALL WRITABLE CARDS  [OFF]",Left+Width,409,12,muted);
+            if(cleanupAvailable)
+                Right(cleanupEnabled?"X  DELETE OLDER COPIES ON ALL WRITABLE CARDS  [ON]":"X  DELETE OLDER COPIES ON ALL WRITABLE CARDS  [OFF]",Left+Width,409,12,muted);
         }
         ui.End();device.EndFrame();
     }

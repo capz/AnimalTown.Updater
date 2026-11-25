@@ -25,6 +25,7 @@ internal static class Updater
     internal static string LaunchImage="",CleanupWarning="";
     internal static UpdateVolume[] Destinations=new UpdateVolume[0];
     internal static string DestinationLabel="";
+    internal static bool CleanupAvailable=true;
     internal static async Task<PreparedDol?> Run(CancellationToken token,Task<int> destinationChoice,Task<bool> cleanupChoice)
     {
         Operation="Read game launch request";Status="Reading game launch information";
@@ -58,11 +59,15 @@ internal static class Updater
                 token.ThrowIfCancellationRequested();
             }
             var destination=destinations[selected];DestinationLabel=destination.Label;
+            CleanupAvailable=destination.CanBoot;
             // Stage Swiss before configuring HTTPS or changing any game images.
-            Operation="Prepare Swiss launch helper";CurrentPath=destination.Root;Status="Finding Swiss on mounted SD cards";
-            var swiss=await volumes.FindSwissAsync(destination,token,static path=>CurrentPath=path);
-            string swissPath=swiss.Path;CurrentPath=swissPath;Status="Preparing Swiss r"+swiss.Revision;
-            launch=await DolLauncher.PrepareAsync(swissPath,token);
+            string swissPath="";
+            if(destination.CanBoot){
+                Operation="Prepare Swiss launch helper";CurrentPath=destination.Root;Status="Finding Swiss on mounted SD cards";
+                var swiss=await volumes.FindSwissAsync(destination,token,static path=>CurrentPath=path);
+                swissPath=swiss.Path;CurrentPath=swissPath;Status="Preparing Swiss r"+swiss.Revision;
+                launch=await DolLauncher.PrepareAsync(swissPath,token);
+            }
             Phase=1;Operation="Start Broadband Adapter";CurrentPath="";Status="Starting Broadband Adapter";
             await NetworkRuntime.StartAsync(new NetworkOptions(),token);await ConfigureTls(token);
             string target="";
@@ -96,9 +101,14 @@ internal static class Updater
             Operation="Stop updater network";CurrentPath=target;TlsConfiguration.Reset();NetworkRuntime.Stop();
             token.ThrowIfCancellationRequested();
             if(target.Length==0){
-                launch.Dispose();launch=null;Phase=2;Operation="Release check complete";CurrentPath=IsoVersion.DiscPath;return null;
+                launch?.Dispose();launch=null;Phase=2;Operation="Release check complete";CurrentPath=IsoVersion.DiscPath;return null;
             }
-            Operation="Prepare new image autoload";launch.SetArguments(SwissLaunch.Arguments(swissPath,target));
+            if(!destination.CanBoot){
+                Phase=4;Operation="Download complete";CurrentPath=target;
+                Status="Update saved to "+target;
+                return null;
+            }
+            Operation="Prepare new image autoload";launch!.SetArguments(SwissLaunch.Arguments(swissPath,target));
             bool gcLoader=destination.Device==StorageDevice.GcLoader;
             Operation=gcLoader?"Select and verify GC Loader image":"Prepare Swiss image launch";
             CurrentPath=target;Status=gcLoader?"Selecting and verifying the game disc":"Preparing to boot through Swiss";Phase=InstallationPhase;

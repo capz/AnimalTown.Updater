@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "dnd_storage.h"
+#include "dnd_network.h"
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -16,6 +17,22 @@ static size_t entries,opens,iso_opens,header_bytes,highest_header_bytes,highest_
 static int highest_handle,swiss_probe_handle;
 static bool in_scan_read,fault_observed;
 static unsigned injected;
+int dnd_scan_mounted_media(int device)
+{
+    if(getenv("DND_SCAN_LIBOGC2_MEDIA")&&dnd_storage_is_mounted(device)){
+        if(device==0)return DND_STORAGE_MEDIA_SD_SP1;
+        if(device==1)return DND_STORAGE_MEDIA_MMCE;
+    }
+    return dnd_storage_mounted_media(device);
+}
+int dnd_scan_net_start(int address,int mask,int gateway,int dhcp)
+{
+    if(getenv("DND_SCAN_LIBOGC2_MEDIA")){
+        dnd_exception_throw(DND_EXCEPTION_IO,"Fixture stopped before networking");
+        return 0;
+    }
+    return dnd_net_start(address,mask,gateway,dhcp);
+}
 #ifdef DND_SCAN_NATIVE_FAULT
 struct dirent *__real_readdir(DIR *directory);
 struct dirent *__wrap_readdir(DIR *directory)

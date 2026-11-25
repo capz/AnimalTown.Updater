@@ -34,19 +34,20 @@ internal static class Program
             int phase=Updater.Phase;
             if(!cleanupChoice.Task.IsCompleted){
                 if(input.B.WasPressed)cancel.Cancel();
-                if(input.X.WasPressed)cleanupEnabled=!cleanupEnabled;
+                if(Updater.CleanupAvailable&&input.X.WasPressed)cleanupEnabled=!cleanupEnabled;
                 // The worker waits here for the last choice shown by the UI.
                 if(phase==Updater.InstallationPhase)cleanupChoice.SetResult(cleanupEnabled);
             }
             console.Draw(Updater.Status,true,false,phase,Updater.DownloadedBytes,Updater.TotalBytes,Updater.Artifact,
-                summary:Updater.ReleaseSummary,updateVersion:Updater.ReleaseVersion,cleanupEnabled:cleanupEnabled,destination:Updater.DestinationLabel);
+                summary:Updater.ReleaseSummary,updateVersion:Updater.ReleaseVersion,cleanupEnabled:cleanupEnabled,
+                destination:Updater.DestinationLabel,cleanupAvailable:Updater.CleanupAvailable);
         }
         try{
             using var launch=task.GetAwaiter().GetResult();
             if(launch==null){
                 while(true){
                     Controller.Update();if(Controller.GetState(0).B.WasPressed)return 0;
-                    console.Draw(Updater.Status,false,false,Updater.Phase,0,0,"",IsoVersion.DiscPath,Updater.Operation);
+                    console.Draw(Updater.Status,false,false,Updater.Phase,0,0,"",destination:Updater.DestinationLabel);
                 }
             }
             if(Updater.CleanupWarning.Length>0){

@@ -1,5 +1,5 @@
-<Project Sdk="DolphinDotNet.Sdk/0.1.0-updater.10">
+<Project Sdk="DolphinDotNet.Sdk/0.1.0-updater.11">
   <PropertyGroup><TargetFramework>net8.0</TargetFramework><DndManagedHeapBytes>1048576</DndManagedHeapBytes></PropertyGroup>
   <ItemGroup><Compile Include="../../src/UpdateVolume.cs" Link="UpdateVolume.cs" /></ItemGroup>
-  <ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="[0.1.0-updater.10]" /><Compile Include="../../src/UpdaterConsole.cs" Link="UpdaterConsole.cs" /><Compile Include="../../src/ConsoleText.cs" Link="ConsoleText.cs" /><Compile Include="../../src/DownloadSpeed.cs" Link="DownloadSpeed.cs" /></ItemGroup>
+  <ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="[0.1.0-updater.11]" /><Compile Include="../../src/UpdaterConsole.cs" Link="UpdaterConsole.cs" /><Compile Include="../../src/ConsoleText.cs" Link="ConsoleText.cs" /><Compile Include="../../src/DownloadSpeed.cs" Link="DownloadSpeed.cs" /></ItemGroup>
 </Project>

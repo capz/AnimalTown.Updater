@@ -33,6 +33,12 @@ named `ipl.dol` at the root. The same picker works for other Swiss setups using
 these adapters. [PicoBoot installation guide](https://support.webhdx.dev/gc/picoboot/installation-guide)
 [PicoLoader storage guide](https://github.com/makeo/PicoLoader#readme)
 
+The pinned libogc2 build also exposes SD2SP1 through the Slot A path and
+supported MMCE adapters through their slot or port paths. SD2SP1 can boot the
+update through Swiss. MMCE is a **save-only** destination. The updater verifies
+the ISO and shows its saved path so it can be moved to a bootable card. When
+you choose MMCE, the previous playable copies are kept.
+
 ## Automatic cleanup of older copies
 
 Press **X** on the updater screen to turn **Delete older copies on all writable
@@ -40,7 +46,8 @@ cards** on or off. The toggle starts off each time you launch the updater and st
 available while it checks, downloads and verifies the release.
 
 With cleanup on, the updater scans every mounted writable SD card after
-verifying the new image and preparing its boot handoff. It removes older
+verifying the new image and preparing its boot handoff. This includes writable
+MMCE storage when the download goes to a bootable card. It removes older
 numbered AnimalTown ISO and GCM images, including renamed copies, based on
 their disc headers. It skips the downloaded ISO by its full path and keeps
 equal or newer releases, development builds and recovery files on every card.
