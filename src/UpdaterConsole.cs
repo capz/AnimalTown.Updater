@@ -48,7 +48,7 @@ internal sealed class UpdaterConsole : IDisposable
         // Leave room for the filename beneath the bar, even if the status wraps.
         if(BodyTop+bodyHeight+summaryHeight+4>FooterY)summaryHeight=0;
         float y=Math.Max(BodyTop,(480-bodyHeight-summaryHeight)/2);
-        Text(failed?(cleanupWarning?"CLEANUP STOPPED":"UPDATE STOPPED"):Stage(phase),Left,y,11,muted);
+        Text(failed?(cleanupWarning?"CLEANUP INCOMPLETE":"UPDATE STOPPED"):Stage(phase),Left,y,11,muted);
         if(failed)Right(Stage(phase),Left+Width,y,11,muted);
         else if(speed.Text.Length>0)Right(speed.Text,Left+Width,y,11,muted);
         y+=30;var statusLines=failed?failureLines:lines;
@@ -88,7 +88,7 @@ internal sealed class UpdaterConsole : IDisposable
         if(failed||!busy)Text(cleanupWarning?"A  START GAME":"B  EXIT",Left,409,12,muted);
         if(busy&&!failed&&phase<5){
             Text("B  CANCEL",Left,409,12,muted);
-            Right(cleanupEnabled?"X  DELETE OLDER ANIMALTOWN COPIES  ON":"X  DELETE OLDER ANIMALTOWN COPIES  OFF",Left+Width,409,12,muted);
+            Right(cleanupEnabled?"X  DELETE OLDER COPIES ON ALL WRITABLE CARDS  [ON]":"X  DELETE OLDER COPIES ON ALL WRITABLE CARDS  [OFF]",Left+Width,409,12,muted);
         }
         ui.End();device.EndFrame();
     }

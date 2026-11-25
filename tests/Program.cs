@@ -310,8 +310,9 @@ foreach(string name in new[]{"AnimalTown.iso","AnimalTown-0.11.24+abcdef123456.n
 Check(StableImageDiscovery.CompareVersions("1.0.0","0.999.999")>0&&StableImageDiscovery.CompareVersions("1.10.0","1.9.999")>0&&StableImageDiscovery.CompareVersions("1.10.12","1.10.9")>0,"stable discovery compares all three version components numerically");
 Check(StableImageDiscovery.CompareVersions("1.10.12","1.10.12")==0,"equal stable versions remain a path tie");
 string volume=Path.Combine(Path.GetTempPath(),"animaltown-discovery-"+Guid.NewGuid());Directory.CreateDirectory(volume);
-void Image(string relative,string version,bool game=true,bool magic=true,int length=0x440){
-    string file=Path.Combine(volume,relative.Replace('/',Path.DirectorySeparatorChar));Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+string secondVolume=volume+"-second";
+void Image(string relative,string version,bool game=true,bool magic=true,int length=0x440,string? root=null){
+    string file=Path.Combine(root??volume,relative.Replace('/',Path.DirectorySeparatorChar));Directory.CreateDirectory(Path.GetDirectoryName(file)!);
     var data=new byte[length];
     if(length>=0x440){Encoding.ASCII.GetBytes(game?"AMTE01":"OTHERN").CopyTo(data,0);if(magic)new byte[]{0xc2,0x33,0x9f,0x3d}.CopyTo(data,0x1c);Encoding.ASCII.GetBytes("AnimalTown / "+version).CopyTo(data,0x20);}
     File.WriteAllBytes(file,data);
@@ -376,17 +377,34 @@ try{
     Image("nested/.__dndcw_hidden/old.iso","1.9.0");
     Image("old.iso.bak","1.9.0");
     Image("old.iso.update","1.9.0");
+    const string publishedName="AnimalTown-1.10.12.nkit.iso";
+    Image("games/"+publishedName,selected.Version);
+    Image("renamed/older copy.GCM","1.9.1",root:secondVolume);
+    Image("games/"+publishedName,selected.Version,root:secondVolume);
+    Image("newer.iso","1.11.0",root:secondVolume);
     string[] olderCopies=new[]{"AnimalTown-0.99.99.iso","A/AnimalTown-1.0.0.nkit.iso","B/AnimalTown-1.9.99.iso",
         "B/AnimalTown-1.10.9.nkit.iso","B/renamed older copy.GCM","AnimalTown-997.0.0.iso"};
-    var olderPaths=olderCopies.Select(name=>Path.Combine(volume,name.Replace('/',Path.DirectorySeparatorChar))).ToArray();
-    var preserved=Directory.EnumerateFiles(volume,"*",SearchOption.AllDirectories).Except(olderPaths)
+    var olderPaths=olderCopies.Select(name=>Path.Combine(volume,name.Replace('/',Path.DirectorySeparatorChar)))
+        .Append(Path.Combine(secondVolume,"renamed","older copy.GCM")).ToArray();
+    string[] cleanupRoots=new[]{volume,secondVolume};
+    var preserved=cleanupRoots.SelectMany(root=>Directory.EnumerateFiles(root,"*",SearchOption.AllDirectories)).Except(olderPaths)
         .ToDictionary(path=>path,File.ReadAllBytes);
-    await StableImageDiscovery.RemoveOlderCopiesAsync(volume,selected.Path,selected.Version);
-    await StableImageDiscovery.RemoveOlderCopiesAsync(volume,selected.Path,selected.Version);
-    Check(olderPaths.All(path=>!File.Exists(path)),"cleanup removes every older stable ISO or GCM based on its header, including renamed copies");
+    string publishedPath=Path.Combine(volume,"games",publishedName);
+    string publishedAlias=Path.Combine(volume,"games",publishedName.ToUpperInvariant());
+    using(var locked=new FileStream(publishedPath,FileMode.Open,FileAccess.Read,FileShare.None)){
+        string unavailable=volume+"-unavailable";
+        string warning=await StableImageDiscovery.RemoveOlderCopiesAsync(new[]{unavailable,volume,secondVolume},publishedAlias,selected.Version);
+        Check(warning.Contains(unavailable),"cleanup reports an unavailable volume and continues on the remaining cards");
+        Check(await StableImageDiscovery.RemoveOlderCopiesAsync(cleanupRoots,publishedAlias,selected.Version)=="",
+            "cleanup is repeatable and skips reading the protected release path under FAT case aliases");
+    }
+    Check(olderPaths.All(path=>!File.Exists(path)),"cleanup removes older stable ISO and GCM copies on both volumes using their headers");
     Check(preserved.All(file=>File.Exists(file.Key)&&File.ReadAllBytes(file.Key).SequenceEqual(file.Value)),
-        "cleanup preserves the selected image, equal and newer releases, previews, unrelated files and recovery data");
-}finally{Directory.Delete(volume,true);}
+        "cleanup preserves the published image byte-for-byte, along with equal and newer releases, previews, unrelated files and recovery data");
+}finally{
+    Directory.Delete(volume,true);
+    if(Directory.Exists(secondVolume))Directory.Delete(secondVolume,true);
+}
 string empty=Path.Combine(Path.GetTempPath(),"animaltown-empty-"+Guid.NewGuid());Directory.CreateDirectory(empty);
 try{bool refused=false;try{await StableImageDiscovery.ScanAsync(empty,default);}catch(IOException){refused=true;}Check(refused,"missing stable images fail without guessing a target directory");}
 finally{Directory.Delete(empty,true);}

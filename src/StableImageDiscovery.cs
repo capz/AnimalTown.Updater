@@ -76,11 +76,30 @@ internal static class StableImageDiscovery
         });
         token.ThrowIfCancellationRequested();return best??throw new IOException("No stable AnimalTown ISO was found on the GC Loader volume");
     }
-    internal static Task RemoveOlderCopiesAsync(string root,string published,string releaseVersion,Action<string>? reportPath=null)
+    internal static async Task<string> RemoveOlderCopiesAsync(string[] roots, string published, string releaseVersion)
     {
-        return VisitStableImagesAsync(root,published,CancellationToken.None,reportPath,(path,version)=>{
-            if(CompareVersions(version,releaseVersion)<0)File.Delete(path);
-        });
+        string currentPath = "", warning = "";
+        Action<string> reportPath = path => currentPath = path;
+        VisitImage removeOlder = (path, version) => {
+            if (CompareVersions(version, releaseVersion) < 0) File.Delete(path);
+        };
+        foreach (string root in roots)
+        {
+            try
+            {
+                await VisitStableImagesAsync(root, published, CancellationToken.None, reportPath, removeOlder);
+            }
+            catch (Exception error)
+            {
+                // Keep the first failure for the console and continue on the other cards.
+                if (warning.Length == 0)
+                {
+                    string message = string.IsNullOrEmpty(error.Message) ? "Could not remove all older copies." : error.Message;
+                    warning = message + "\n" + currentPath;
+                }
+            }
+        }
+        return warning;
     }
     private static async Task VisitStableImagesAsync(string root,string excludedImage,CancellationToken token,Action<string>? reportPath,VisitImage visit)
     {
@@ -106,11 +125,12 @@ internal static class StableImageDiscovery
                 if(++work>=32){work=0;await Task.Yield();}
                 if(IsStagingPath(path))continue;
                 if(System.IO.Directory.Exists(path)){
-                    if(depth+1==cursors.Length)throw new IOException("GC Loader directory nesting exceeds the bounded scan depth");
+                    if(depth+1==cursors.Length)throw new IOException("SD card directory nesting exceeds the scan depth limit");
                     directories[++depth]=path;
                     cursors[depth]=System.IO.Directory.EnumerateFileSystemEntries(path).GetEnumerator();continue;
                 }
                 if(!SameSuffix(path,".iso")&&!SameSuffix(path,".gcm"))continue;
+                // Exclude the published file before opening it, including FAT case aliases.
                 if(ComparePaths(path,excludedImage)==0)continue;
                 // Real read failures abort; bad/foreign headers are rejected.
                 if(!ImageFiles.TryReadVersion(path,header,out string version))continue;

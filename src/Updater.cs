@@ -106,15 +106,8 @@ internal static class Updater
             token.ThrowIfCancellationRequested();
             if(gcLoader)Storage.SelectGcLoaderDiscImage(target);
             if(cleanupEnabled){
-                Operation="Remove older AnimalTown copies";Status="Removing older AnimalTown copies";
-                try{
-                    await StableImageDiscovery.RemoveOlderCopiesAsync(destination.Root,target,ReleaseVersion,static path=>CurrentPath=path);
-                }catch(Exception error){
-                    // Cleanup can fail after the verified image has been prepared for boot.
-                    // Keep the prepared Swiss handoff available from the warning screen.
-                    string message=string.IsNullOrEmpty(error.Message)?"Could not remove all older copies.":error.Message;
-                    CleanupWarning=message+"\n"+CurrentPath;
-                }
+                Operation="Remove older AnimalTown copies";Status="Cleaning up older copies on the SD cards";
+                CleanupWarning=await volumes.RemoveOlderCopiesAsync(target,ReleaseVersion);
             }
             LaunchImage=target;Phase=6;Operation="Launch selected image through Swiss";CurrentPath=target;Status="Starting AnimalTown";
             return launch;

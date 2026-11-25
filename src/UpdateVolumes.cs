@@ -11,6 +11,7 @@ namespace AnimalTown.Updater;
 internal sealed class UpdateVolumes : IDisposable
 {
     private readonly List<UpdateVolume> mounted = new List<UpdateVolume>();
+    private readonly List<string> writableRoots = new List<string>();
 
     internal async Task<UpdateVolume[]> FindWritableAsync(CancellationToken token, Action<string> reportPath)
     {
@@ -24,10 +25,11 @@ internal sealed class UpdateVolumes : IDisposable
             {
                 if (!Storage.Mount(volume.Device)) continue;
                 mounted.Add(volume);
-                string games = volume.Root + "games";
-                if (File.Exists(games)) continue;
                 // The contiguous writer stages at the volume root before publishing to /games.
                 ProbeWrite(volume.Root);
+                writableRoots.Add(volume.Root);
+                string games = volume.Root + "games";
+                if (File.Exists(games)) continue;
                 if (Directory.Exists(games)) ProbeWrite(volume.GamesDirectory);
                 writable.Add(volume);
             }
@@ -36,6 +38,9 @@ internal sealed class UpdateVolumes : IDisposable
         }
         return writable.ToArray();
     }
+
+    internal Task<string> RemoveOlderCopiesAsync(string published, string releaseVersion)
+        => StableImageDiscovery.RemoveOlderCopiesAsync(writableRoots.ToArray(), published, releaseVersion);
 
     private static void ProbeWrite(string directory)
     {
