@@ -15,6 +15,7 @@
     <Compile Include="../../src/Updater.cs" Link="Updater.cs" />
     <Compile Include="../../src/SwissLaunch.cs" Link="SwissLaunch.cs" />
     <Compile Include="../../src/UpdateWorker.cs" Link="UpdateWorker.cs" />
+    <Compile Include="../../src/UpdateVolumes.cs" Link="UpdateVolumes.cs" />
     <Compile Include="../../src/UpdaterClock.cs" Link="UpdaterClock.cs" />
     <Compile Include="../../src/EmbeddedTrust.cs" Link="EmbeddedTrust.cs" />
     <Compile Include="../../src/LaunchRequest.cs" Link="LaunchRequest.cs" />
@@ -22,6 +23,7 @@
     <ProjectReference Include="$(ScanSdkSource)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="../../src/UpdateVolume.cs" Link="UpdateVolume.cs" />
     <Compile Include="../../src/StableImageDiscovery.cs" Link="StableImageDiscovery.cs" />
     <Compile Include="../../src/ImageFiles.cs" Link="ImageFiles.cs" />
     <Compile Include="../../src/ReleaseInfo.cs" Link="ReleaseInfo.cs" />

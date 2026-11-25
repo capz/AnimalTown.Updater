@@ -25,7 +25,7 @@ internal sealed class UpdaterConsole : IDisposable
     private float Measure(string text)=>font.MeasureText(text,scale).X;
     private float MeasureDiagnostic(string text)=>font.MeasureText(text,diagnosticScale).X;
     internal void Draw(string status,bool busy,bool failed,int phase,long received,long total,string artifact,string detail="",string operation="",
-        string summary="",string updateVersion="")
+        string summary="",string updateVersion="",bool cleanupEnabled=false,bool cleanupWarning=false,string destination="",bool cleanupAvailable=true)
     {
         speed.Update(busy&&!failed&&phase==3,received,total,Clock.Timestamp);
         if(status!=cachedStatus||failed!=cachedFailed){cachedStatus=status;cachedFailed=failed;lineCount=ConsoleText.Wrap(status,Width-dotCell*3-10,measure,failed?failureLines:lines);}
@@ -42,15 +42,13 @@ internal sealed class UpdaterConsole : IDisposable
         int percent=ConsoleText.Percent(received,total);
         if(received!=lastReceived||total!=lastTotal){lastReceived=received;lastTotal=total;cachedTransfer=ConsoleText.Transfer(received,total);}
         if(percent!=lastPercent){lastPercent=percent;cachedPercent=percent+"%";}
-        device.BeginFrame(new Color32(232,234,237));ui.Begin();
-        Text("ANIMALTOWN",Left,53,16,ink);Right("SYSTEM UPDATE / GCN",Width+Left,57,11,muted);
-        ui.FillRectangle(new RectF(Left,87,Width,1),rule);
+        BeginFrame(destination);
         float bodyHeight=failed?30+lineCount*lineHeight+(operationCount>0?34+operationCount*diagnosticLineHeight:0)+(detailCount>0?12+detailCount*diagnosticLineHeight:0):12+18+lineCount*lineHeight+28+(total>0?64:20);
         float summaryHeight=busy&&!failed&&total>0&&summaryCount>0?SummaryGap+SummaryLabelHeight+summaryCount*diagnosticLineHeight:0;
         // Leave room for the filename beneath the bar, even if the status wraps.
         if(BodyTop+bodyHeight+summaryHeight+4>FooterY)summaryHeight=0;
         float y=Math.Max(BodyTop,(480-bodyHeight-summaryHeight)/2);
-        Text(failed?"UPDATE STOPPED":Stage(phase),Left,y,11,muted);
+        Text(failed?(cleanupWarning?"CLEANUP INCOMPLETE":"UPDATE STOPPED"):Stage(phase),Left,y,11,muted);
         if(failed)Right(Stage(phase),Left+Width,y,11,muted);
         else if(speed.Text.Length>0)Right(speed.Text,Left+Width,y,11,muted);
         y+=30;var statusLines=failed?failureLines:lines;
@@ -87,8 +85,37 @@ internal sealed class UpdaterConsole : IDisposable
             if(speed.Eta.Length>0)Right(speed.Eta,Left+Width,y+57,11,muted);
         }else Text("GITHUB RELEASES / NKIT IMAGE",Left,y+28,12,muted);
         ui.FillRectangle(new RectF(Left,FooterY,Width,1),rule);
-        Text(failed||!busy?"B  EXIT":"B  CANCEL",Left,409,12,muted);Right("GC LOADER / SD",Left+Width,409,12,muted);
+        if(failed||!busy)Text(cleanupWarning?"A  START GAME":"B  EXIT",Left,409,12,muted);
+        if(busy&&!failed&&phase<5){
+            Text("B  CANCEL",Left,409,12,muted);
+            if(cleanupAvailable)
+                Right(cleanupEnabled?"X  DELETE OLDER COPIES ON ALL WRITABLE CARDS  [ON]":"X  DELETE OLDER COPIES ON ALL WRITABLE CARDS  [OFF]",Left+Width,409,12,muted);
+        }
         ui.End();device.EndFrame();
+    }
+    internal void DrawDestinations(UpdateVolume[] destinations,int selected)
+    {
+        BeginFrame("");
+        Text("Choose where to save the update",Left,BodyTop+16,20,ink);
+        for(int i=0;i<destinations.Length;i++){
+            var volume=destinations[i];
+            float y=172+i*45;
+            if(i==selected)ui.FillRectangle(new RectF(Left,y,Width,37),rule);
+            Text(volume.Label,Left+12,y+9,16,ink);
+            Right(volume.GamesDirectory,Left+Width-12,y+11,13,ink);
+        }
+        ui.FillRectangle(new RectF(Left,FooterY,Width,1),rule);
+        Text("D-PAD  MOVE",Left,409,12,muted);
+        Text("A  SELECT",Left+Width/2-35,409,12,muted);
+        Right("B  CANCEL",Left+Width,409,12,muted);
+        ui.End();device.EndFrame();
+    }
+    private void BeginFrame(string destination)
+    {
+        device.BeginFrame(new Color32(232,234,237));ui.Begin();
+        Text("ANIMALTOWN",Left,53,16,ink);
+        Right(destination.Length>0?destination:"SYSTEM UPDATE / GCN",Width+Left,57,11,muted);
+        ui.FillRectangle(new RectF(Left,87,Width,1),rule);
     }
     private void Text(string text,float x,float y,float height,Color32 color)=>ui.DrawText(font,text,new Vector2(x,y),color,height/font.CellHeight);
     private void Right(string text,float right,float y,float height,Color32 color)

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using AnimalTown.Updater;
+using Dolphin.Storage;
 using Dolphin.Timing;
 
 int checks=0;
@@ -51,6 +52,21 @@ foreach(string launchTarget in new[]{"gcloader:/Games/Café 猫/AnimalTown-0.14.
 }
 foreach(string launchTarget in new[]{"gcloader:/../escape.iso","gcloader:/bad\nAutoBoot=No.iso","gcloader:/bad=setting.iso"})
     Reject(()=>SwissLaunch.Arguments("gcloader:/boot.dol",launchTarget),"Swiss autoload cannot inject a configuration or escape the volume");
+foreach(var (root,swissRoot) in new[]{("sd:/","sdc:/"),("carda:/","sda:/"),("cardb:/","sdb:/")}){
+    const string asset="AnimalTown-0.23.0.nkit.iso";
+    string destination=LaunchRequest.DownloadPath(root+"games/",asset);
+    Check(destination==root+"games/"+asset&&SwissLaunch.Arguments("gcloader:/boot.dol",destination)[1]=="Autoload="+swissRoot+"games/"+asset,
+        "the selected SD destination is preserved in the download path and Swiss handoff, even with a separate helper card");
+}
+var slotA=UpdateVolume.Supported.Single(volume=>volume.Device==StorageDevice.SdSlotA);
+var port1=slotA.WithMountedMedia(StorageMedia.SdSerialPort1);
+Check(port1.Label=="SD2SP1"&&port1.CanBoot&&port1.GamesDirectory=="carda:/games/","SD2SP1 uses Swiss's Slot A path with its adapter label");
+foreach(var (device,label) in new[]{(StorageDevice.SdSlotA,"Slot A"),(StorageDevice.SdSlotB,"Slot B"),(StorageDevice.SdSerialPort2,"Serial Port 2")}){
+    var sd=UpdateVolume.Supported.Single(volume=>volume.Device==device);
+    var mmce=sd.WithMountedMedia(StorageMedia.Mmce);
+    Check(mmce.Label=="MMCE ("+label+", save only)"&&!mmce.CanBoot&&mmce.GamesDirectory==sd.GamesDirectory,
+        "MMCE appears at the underlying mount path with a save-only label");
+}
 foreach(var date in new[]{new CalendarTime(2024,1,1,14,0),new CalendarTime(2024,2,29,23,59,59),new CalendarTime(2026,11,14,12,34,56),new CalendarTime(2038,1,18,13,14,7)}){
     long expected=new DateTimeOffset(date.Year,date.Month,date.Day,date.Hour,date.Minute,date.Second,TimeSpan.Zero).ToUnixTimeSeconds();
     Check(UpdaterClock.LocalUnixSeconds(date)==expected,"console local calendar is encoded exactly as the clock-window center");
@@ -188,7 +204,7 @@ string[] Request(string path,string version="0.11.24")=>new[]{"dvd:/animal-town-
 var discoveryRequest=LaunchRequest.Parse(new[]{"dvd:/animal-town-updater.dol",LaunchRequest.DiscoveryProtocol,"0.11.24+abcdef123456"});
 Check(discoveryRequest.Image==""&&discoveryRequest.Version=="0.11.24+abcdef123456","discovery handoff needs only running identity, not an image mapping");
 var discRequest=LaunchRequest.Parse(new[]{"dvd:/animal-town-updater.dol",LaunchRequest.DiscVersionProtocol,"0.22.0"});
-Check(discRequest.Image==""&&discRequest.DownloadPath("AnimalTown-0.23.0.nkit.iso")=="gcloader:/games/AnimalTown-0.23.0.nkit.iso","disc-version handoff installs the published basename in /games without a volume scan");
+Check(discRequest.Image=="","disc-version handoff supplies running identity without a destination path");
 foreach(string version in new[]{"0.22.0","0.22.0+0123456789ab","2147483647.2.3"}){
     using var input=new VersionStream(Encoding.ASCII.GetBytes(version),1);
     Check(IsoVersion.Read(input)==version,"bounded version file read handles short reads and retains exact build identity");
@@ -204,14 +220,13 @@ foreach(string path in new[]{"gcloader:/My Town.iso","gcloader:/Games/Animal Tow
     var request=LaunchRequest.Parse(Request(path));
     Check(request.Image==path&&request.Backup==path+".bak"&&request.Marker==path+".update","a launch request preserves the actual root, subdirectory, spaced or Unicode image name");
     Check(request.Directory+path.Substring(path.LastIndexOf('/')+1)==path,"directory paths preserve the exact target");
-    Check(request.Root=="gcloader:/"&&request.DownloadPath(mainRelease.Name)==LaunchRequest.GamesDirectory+mainRelease.Name,"legacy launch paths cannot redirect the fixed /games destination");
+    Check(request.Root=="gcloader:/","legacy launch paths remain rooted on GC Loader");
     request.VerifyInstalledVersion("0.11.24");Reject(()=>request.VerifyInstalledVersion("0.11.25"),"a changed installed identity is refused before replacement");
 }
 foreach(string[] arguments in new[]{Array.Empty<string>(),new[]{"updater.dol"},new[]{"updater.dol",LaunchRequest.Protocol,"gcloader:/Town.iso"},new[]{"updater.dol",LaunchRequest.Protocol,"gcloader:/Town.iso","0.11.24","extra"},new[]{"updater.dol","--animaltown-update=2","gcloader:/Town.iso","0.11.24"},new[]{"",LaunchRequest.Protocol,"gcloader:/Town.iso","0.11.24"}})Reject(()=>LaunchRequest.Parse(arguments),"missing, extra or unsupported request arguments never guess a target");
 foreach(string path in new[]{"AnimalTown.iso","/AnimalTown.iso","dvd:/AnimalTown.iso","sd:/AnimalTown.iso","carda:/AnimalTown.iso","gcldr:/AnimalTown.iso","gcloader:Town.iso","gcloader:/","gcloader://Town.iso","gcloader:/games/../Town.iso","gcloader:/./Town.iso","gcloader:/games//Town.iso","gcloader:/games/Town.iso/","gcloader:/Town.iso\0","gcloader:/Town\n.iso","gcloader:/Town\\name.iso","gcloader:/Town=AutoBoot.iso","gcloader:/Town?.iso","gcloader:/Town*.iso","gcloader:/Town\".iso","gcloader:/Town<.iso","gcloader:/Town>.iso","gcloader:/Town|.iso","gcloader:/games /Town.iso","gcloader:/games./Town.iso","gcloader:/Town.iso ","gcloader:/Town.iso.","gcloader:/Town.dol","gcloader:/Town.iso.bak","gcloader:/Town.nkit","gcloader:/bad\ud800.iso","gcloader:/bad\udc00.iso","gcloader:/"+new string('a',245)+".iso","gcloader:/"+new string('界',250)+"/"+new string('界',100)+"/Town.iso"})Reject(()=>LaunchRequest.Parse(Request(path)),"noncanonical, wrong-device, unsafe or oversized targets are rejected");
-var colliding=LaunchRequest.Parse(Request("gcloader:/Games/AnimalTown-0.11.24.nkit.iso","0.11.23"));
-Check(colliding.DownloadPath(mainRelease.Name)=="gcloader:/games/"+mainRelease.Name,"canonical published destination does not inherit the old image's directory spelling");
-foreach(string name in new[]{"../AnimalTown-0.11.24.nkit.iso","AnimalTown-../Town.nkit.iso","gcloader:/AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24.iso","AnimalTown-0.11.24.nkit.iso.bak"})Reject(()=>colliding.DownloadPath(name),"release download names cannot escape the staging directory");
+Check(LaunchRequest.DownloadPath("gcloader:/games/",mainRelease.Name)=="gcloader:/games/"+mainRelease.Name,"GC Loader keeps the published filename in /games");
+foreach(string name in new[]{"../AnimalTown-0.11.24.nkit.iso","AnimalTown-../Town.nkit.iso","gcloader:/AnimalTown-0.11.24.nkit.iso","AnimalTown-0.11.24.iso","AnimalTown-0.11.24.nkit.iso.bak"})Reject(()=>LaunchRequest.DownloadPath("sd:/games/",name),"release download names cannot escape the destination directory");
 const string image="AnimalTown.iso",download="AnimalTown-0.14.9.abcdef123456.nkit.iso";
 for(int failure=1;failure<=6;failure++){
     var files=new FakeFiles{FailAt=failure};files.Data[image]="original";files.Data[image+".bak"]="older";files.Data[download]="new";
@@ -268,7 +283,7 @@ var absentCurrent=new FakeFiles();bool absentSelected=false;
 Reject(()=>InstallTransaction.ActivateAndDeleteSelected(absentCurrent,image,image,path=>absentSelected=true),"already-current handoff still requires the image to exist");
 Check(!absentSelected&&absentCurrent.Events.Count==0,"missing current image cannot cause activation or mutation");
 foreach(string target in new[]{"gcloader:/My Town.iso","gcloader:/Games/Animal Town/custom.nkit.iso","gcloader:/街/Forêt 🦊.gcm"})foreach(bool after in new[]{false,true})for(int failure=1;failure<=5;failure++){
-    var request=LaunchRequest.Parse(Request(target));string staged=request.DownloadPath(mainRelease.Name);
+    var request=LaunchRequest.Parse(Request(target));string staged=LaunchRequest.DownloadPath("gcloader:/games/",mainRelease.Name);
     var files=new FakeFiles{FailAt=failure,FailAfter=after};files.Data[request.Image]="original";files.Data[request.Backup]="older";files.Data[staged]="new";files.Data["gcloader:/AnimalTown.iso"]="unrelated";
     try{InstallTransaction.Commit(files,request.Image,staged);}catch(IOException){}
     files.FailAt=0;InstallTransaction.Recover(files,request.Image);InstallTransaction.Recover(files,request.Image);
@@ -305,8 +320,9 @@ foreach(string name in new[]{"AnimalTown.iso","AnimalTown-0.11.24+abcdef123456.n
 Check(StableImageDiscovery.CompareVersions("1.0.0","0.999.999")>0&&StableImageDiscovery.CompareVersions("1.10.0","1.9.999")>0&&StableImageDiscovery.CompareVersions("1.10.12","1.10.9")>0,"stable discovery compares all three version components numerically");
 Check(StableImageDiscovery.CompareVersions("1.10.12","1.10.12")==0,"equal stable versions remain a path tie");
 string volume=Path.Combine(Path.GetTempPath(),"animaltown-discovery-"+Guid.NewGuid());Directory.CreateDirectory(volume);
-void Image(string relative,string version,bool game=true,bool magic=true,int length=0x440){
-    string file=Path.Combine(volume,relative.Replace('/',Path.DirectorySeparatorChar));Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+string secondVolume=volume+"-second";
+void Image(string relative,string version,bool game=true,bool magic=true,int length=0x440,string? root=null){
+    string file=Path.Combine(root??volume,relative.Replace('/',Path.DirectorySeparatorChar));Directory.CreateDirectory(Path.GetDirectoryName(file)!);
     var data=new byte[length];
     if(length>=0x440){Encoding.ASCII.GetBytes(game?"AMTE01":"OTHERN").CopyTo(data,0);if(magic)new byte[]{0xc2,0x33,0x9f,0x3d}.CopyTo(data,0x1c);Encoding.ASCII.GetBytes("AnimalTown / "+version).CopyTo(data,0x20);}
     File.WriteAllBytes(file,data);
@@ -364,7 +380,41 @@ try{
         Check(stoppedAt==Path.Combine(volume,"AnimalTown-20.0.0.iso"),"failed image-header read retains the actual candidate path");
     }
     Check(File.Exists(selected.Path),"discovery I/O failure preserves the previous selected installation");
-}finally{Directory.Delete(volume,true);}
+
+    Image("B/renamed older copy.GCM","1.9.0");
+    Image("renamed-old-preview.iso","1.9.0+abcdef123456");
+    Image(".animaltown-update/old.iso","1.9.0");
+    Image("nested/.__dndcw_hidden/old.iso","1.9.0");
+    Image("old.iso.bak","1.9.0");
+    Image("old.iso.update","1.9.0");
+    const string publishedName="AnimalTown-1.10.12.nkit.iso";
+    Image("games/"+publishedName,selected.Version);
+    Image("renamed/older copy.GCM","1.9.1",root:secondVolume);
+    Image("games/"+publishedName,selected.Version,root:secondVolume);
+    Image("newer.iso","1.11.0",root:secondVolume);
+    string[] olderCopies=new[]{"AnimalTown-0.99.99.iso","A/AnimalTown-1.0.0.nkit.iso","B/AnimalTown-1.9.99.iso",
+        "B/AnimalTown-1.10.9.nkit.iso","B/renamed older copy.GCM","AnimalTown-997.0.0.iso"};
+    var olderPaths=olderCopies.Select(name=>Path.Combine(volume,name.Replace('/',Path.DirectorySeparatorChar)))
+        .Append(Path.Combine(secondVolume,"renamed","older copy.GCM")).ToArray();
+    string[] cleanupRoots=new[]{volume,secondVolume};
+    var preserved=cleanupRoots.SelectMany(root=>Directory.EnumerateFiles(root,"*",SearchOption.AllDirectories)).Except(olderPaths)
+        .ToDictionary(path=>path,File.ReadAllBytes);
+    string publishedPath=Path.Combine(volume,"games",publishedName);
+    string publishedAlias=Path.Combine(volume,"games",publishedName.ToUpperInvariant());
+    using(var locked=new FileStream(publishedPath,FileMode.Open,FileAccess.Read,FileShare.None)){
+        string unavailable=volume+"-unavailable";
+        string warning=await StableImageDiscovery.RemoveOlderCopiesAsync(new[]{unavailable,volume,secondVolume},publishedAlias,selected.Version);
+        Check(warning.Contains(unavailable),"cleanup reports an unavailable volume and continues on the remaining cards");
+        Check(await StableImageDiscovery.RemoveOlderCopiesAsync(cleanupRoots,publishedAlias,selected.Version)=="",
+            "cleanup is repeatable and skips reading the protected release path under FAT case aliases");
+    }
+    Check(olderPaths.All(path=>!File.Exists(path)),"cleanup removes older stable ISO and GCM copies on both volumes using their headers");
+    Check(preserved.All(file=>File.Exists(file.Key)&&File.ReadAllBytes(file.Key).SequenceEqual(file.Value)),
+        "cleanup preserves the published image byte-for-byte, along with equal and newer releases, previews, unrelated files and recovery data");
+}finally{
+    Directory.Delete(volume,true);
+    if(Directory.Exists(secondVolume))Directory.Delete(secondVolume,true);
+}
 string empty=Path.Combine(Path.GetTempPath(),"animaltown-empty-"+Guid.NewGuid());Directory.CreateDirectory(empty);
 try{bool refused=false;try{await StableImageDiscovery.ScanAsync(empty,default);}catch(IOException){refused=true;}Check(refused,"missing stable images fail without guessing a target directory");}
 finally{Directory.Delete(empty,true);}
@@ -402,8 +452,8 @@ try{
     bool missing=false;try{await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog);}catch(IOException error){missing=error.Message.Contains("drive root");}
     Check(missing&&File.Exists(nested),"Swiss discovery ignores nested executables and explains root placement without modifying them");
     string fallback=SwissFile("animaltown-updater/swiss.dol",newSwiss);
-    string rootOld=SwissFile("boot.dol",oldSwiss);
-    Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==rootOld,"a supported root Swiss takes priority over a newer legacy private helper");
+    string rootOld=SwissFile("ipl.dol",oldSwiss);
+    Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==rootOld,"a supported PicoBoot ipl.dol at the root takes priority over a newer legacy private helper");
     File.Delete(rootOld);
     Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==fallback,"an existing private helper remains a content-validated fallback when root has none");
     File.WriteAllBytes(fallback,SwissDol(4));

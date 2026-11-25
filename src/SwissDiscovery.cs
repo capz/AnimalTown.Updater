@@ -23,6 +23,11 @@ internal static class SwissDiscovery
     }
     internal static async Task<SwissImage> FindAsync(string root,CancellationToken token,Action<string>? reportPath=null,SwissBuild[]? builds=null)
     {
+        return await TryFindAsync(root,token,reportPath,builds)
+            ??throw new IOException("No supported Swiss DOL found. Copy an official Swiss normal DOL to the GC Loader drive root.");
+    }
+    internal static async Task<SwissImage?> TryFindAsync(string root,CancellationToken token,Action<string>? reportPath=null,SwissBuild[]? builds=null)
+    {
         builds=builds??SwissBuilds.Official;
         SwissImage? best=null;byte[]? buffer=null;int work=0;
         token.ThrowIfCancellationRequested();reportPath?.Invoke(root);
@@ -48,7 +53,7 @@ internal static class SwissDiscovery
             var build=await ProbeAsync(legacy,builds,buffer,token);
             if(build!=null)return new SwissImage(legacy,build.Revision);
         }
-        throw new IOException("No supported Swiss DOL found. Copy an official Swiss normal DOL to the GC Loader drive root.");
+        return null;
     }
     private static bool KnownLength(long length,SwissBuild[] builds)
     {

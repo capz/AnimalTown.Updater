@@ -10,13 +10,12 @@ internal sealed class LaunchRequest
     internal const string Protocol="--animaltown-update=1";
     internal const string DiscoveryProtocol="--animaltown-update=2";
     internal const string DiscVersionProtocol="--animaltown-update=3";
-    internal const string GamesDirectory="gcloader:/games/";
     internal readonly string Root="gcloader:/";
-    internal readonly string Image,Version,Directory,Backup,Marker,DownloadDirectory;
+    internal readonly string Image,Version,Directory,Backup,Marker;
 
     private LaunchRequest(string image,string version)
     {
-        Image=image;Version=version;DownloadDirectory=GamesDirectory;
+        Image=image;Version=version;
         if(image.Length==0){Directory=Root;Backup=Marker="";return;}
         int slash=image.Length-1;while(image[slash]!='/')slash--;Directory=image.Substring(0,slash+1);
         Backup=image+".bak";Marker=image+".update";
@@ -77,13 +76,13 @@ internal sealed class LaunchRequest
         return bytes;
     }
 
-    internal string DownloadPath(string fileName)
+    internal static string DownloadPath(string gamesDirectory,string fileName)
     {
         const string prefix="AnimalTown-",suffix=".nkit.iso";
         if(fileName==null||!fileName.StartsWith(prefix)||!fileName.EndsWith(suffix)||fileName.Length<=prefix.Length+suffix.Length)
             throw new IOException("Invalid release image filename.");
         ReleaseInfo.ParseVersion(fileName.Substring(prefix.Length,fileName.Length-prefix.Length-suffix.Length));
-        string result=DownloadDirectory+fileName;Utf8Length(result,1000);return result;
+        string result=gamesDirectory+fileName;Utf8Length(result,1000);return result;
     }
 
     internal void VerifyInstalledVersion(string actual)

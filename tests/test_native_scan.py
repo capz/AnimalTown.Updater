@@ -87,7 +87,8 @@ def main():
         '--aot',project.parent/'bin/Release/net8.0/ScanAotSmoke.dll',generated)
     if args.updater and 'StableImageDiscovery_ScanAsync' in generated.read_text():
         raise AssertionError('Installed-ISO scan remains reachable from the version-file updater')
-    generated.write_text('#define dnd_fs_dir_next dnd_scan_dir_next\n#define dnd_fs_open dnd_scan_open\n#define dnd_fs_read dnd_scan_read\n#define dnd_fs_close dnd_scan_close\n'+generated.read_text())
+    generated.write_text('#define dnd_fs_dir_next dnd_scan_dir_next\n#define dnd_fs_open dnd_scan_open\n#define dnd_fs_read dnd_scan_read\n#define dnd_fs_close dnd_scan_close\n'
+                         '#define dnd_storage_mounted_media dnd_scan_mounted_media\n#define dnd_net_start dnd_scan_net_start\n'+generated.read_text())
     instrument_runtime(sdk,instrumented)
     runtime=['storage','contiguous_write','file_optimize','file_extents','verified_copy','timing',
              'async_runtime','stw','gc_stw','text','numeric','bcl']
@@ -103,6 +104,7 @@ def main():
     if args.ui:sources.append(ROOT/'tests/native-scan-ui.c')
     run(*flags,generated,ROOT/'tests/native-scan-host.c',instrumented,*sources,dead_strip,'-lm','-o',binary)
     scenarios=['small','wide','candidates','deep'] if args.scenario=='all' else [args.scenario]
+    if args.updater:scenarios += ['multi-destination','sd-only','adapters-only','libogc2-media']
     if fault_enabled:scenarios += ['native-memory-fault']
     results=[]
     for scenario in scenarios:
@@ -110,9 +112,23 @@ def main():
             volume_root=Path(fixture_root)
             volume=fixture(volume_root,scenario,args.width if scenario!='deep' else min(args.width,100),args.highest_created_first)
             if args.updater:
+                if scenario in ('sd-only','adapters-only'):
+                    volume=volume.rename(volume_root/'sd')
+                if scenario=='adapters-only':
+                    image(volume_root/'cardb'/'games'/'old.GCM','0.20.0')
+                if scenario=='libogc2-media':
+                    volume=volume.rename(volume_root/'carda')
+                    (volume_root/'cardb').mkdir()
+                if scenario=='multi-destination':
+                    (volume_root/'sd').mkdir()
+                    (volume_root/'carda').mkdir()
+                    (volume_root/'carda'/'games').write_bytes(b'blocked destination')
+                    (volume_root/'cardb'/'games').mkdir(parents=True)
                 swiss_fixture(volume)
                 disc=volume_root/'dvd';disc.mkdir();(disc/'version.md').write_bytes(b'0.22.0')
-            before=snapshot(volume)
+                if scenario in ('multi-destination','sd-only','adapters-only','libogc2-media'):(disc/scenario).touch()
+            snapshot_root=volume_root if args.updater else volume
+            before=snapshot(snapshot_root)
             env=dict(os.environ,DND_STORAGE_ROOT=str(volume_root),DND_ASYNC_MANUAL='1',DND_SCAN_HEAP_BYTES='1048576')
             # Production Swiss discovery makes a second top-directory pass;
             # the injected-catalog streaming fixture makes one additional pass.
@@ -120,13 +136,14 @@ def main():
             else:
                 env['DND_SCAN_EXPECT_ENTRIES']=str(len(before))
                 env['DND_SCAN_EXPECT_IMAGE_ENTRIES']=str(len(before))
-            if args.updater:env['DND_SCAN_EXPECT_SWISS_BYTES']=str(2097408+256+32)
+            if scenario=='libogc2-media':env['DND_SCAN_LIBOGC2_MEDIA']='1'
+            if args.updater:env['DND_SCAN_EXPECT_SWISS_BYTES']=str(0 if scenario=='libogc2-media' else 2097408+256+32)
             if args.updater:env['DND_SCAN_EXPECT_AUTO_DEFRAG']='1'
             if args.automatic:env.pop('DND_ASYNC_MANUAL',None)
             if scenario=='native-memory-fault':env['DND_SCAN_NATIVE_MEMORY_FAULT']='1'
             else:env.pop('DND_SCAN_NATIVE_MEMORY_FAULT',None)
             result=subprocess.run([str(binary)],env=env,text=True,capture_output=True,timeout=120)
-            unchanged=before==snapshot(volume)
+            unchanged=before==snapshot(snapshot_root)
             print(scenario+':\n'+result.stdout+result.stderr,flush=True)
             results.append({'scenario':scenario,'returncode':result.returncode,'unchanged':unchanged,'stdout':result.stdout,'stderr':result.stderr})
     (work/'results.json').write_text(json.dumps(results,indent=2)+'\n')

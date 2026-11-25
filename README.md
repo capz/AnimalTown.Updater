@@ -5,10 +5,10 @@ Standalone GameCube updater written in C# with DolphinDotNet. The output is
 passes its running build version. The updater mounts the launched disc, reads
 its root `version.md` through a 64-byte bound and confirms the launch identity.
 It compares that numeric version with the compact online release feed and
-downloads a newer release as `gcloader:/games/<published filename>`. It switches
-GC Loader to the verified file, checks physical disc readback and exits into
-Swiss to boot it. No installed-ISO scan is performed. Existing images are kept:
-the version file identifies the running version, not its physical filename.
+downloads a newer release into `/games` on the chosen SD card. Swiss boots the
+verified file. For a GC Loader destination, the updater also switches the
+physical drive to the image and verifies disc readback before starting Swiss.
+By default the updater keeps existing images and skips the installed-image scan.
 
 Swiss receives separate `Autoload=<image>`, `AutoBoot=Yes`, `BS2Boot=No` and
 `Prefer Clean Boot=No` arguments, with its executable path as argv[0]. Both a
@@ -18,6 +18,42 @@ to autoload. Swiss is
 still the image loader; its own startup or error screens can appear, and holding
 B retains Swiss's intentional autoboot override. This restarts the game; it does
 not restore the previous process's live memory.
+
+## Choose a download destination
+
+At startup the updater checks GC Loader SD, SD2SP2 and SD Gecko in Slots A and B.
+It uses the only writable card automatically. With multiple writable cards,
+use **D-pad Up/Down** to highlight a card and press **A** to confirm or **B** to
+cancel. The update keeps the published filename in the selected card's `/games`
+directory. The card needs enough contiguous free space for the release.
+
+PicoBoot and PicoLoader setups use the same SD2SP2 and SD Gecko destinations.
+The updater lists the card by its adapter, and accepts a supported Swiss DOL
+named `ipl.dol` at the root. The same picker works for other Swiss setups using
+these adapters. [PicoBoot installation guide](https://support.webhdx.dev/gc/picoboot/installation-guide)
+[PicoLoader storage guide](https://github.com/makeo/PicoLoader#readme)
+
+The pinned libogc2 build also exposes SD2SP1 through the Slot A path and
+supported MMCE adapters through their slot or port paths. SD2SP1 can boot the
+update through Swiss. MMCE is a **save-only** destination. The updater verifies
+the ISO and shows its saved path so it can be moved to a bootable card. When
+you choose MMCE, the previous playable copies are kept.
+
+## Automatic cleanup of older copies
+
+Press **X** on the updater screen to turn **Delete older copies on all writable
+cards** on or off. The toggle starts off each time you launch the updater and stays
+available while it checks, downloads and verifies the release.
+
+With cleanup on, the updater scans every mounted writable SD card after
+verifying the new image and preparing its boot handoff. This includes writable
+MMCE storage when the download goes to a bootable card. It removes older
+numbered AnimalTown ISO and GCM images, including renamed copies, based on
+their disc headers. It skips the downloaded ISO by its full path and keeps
+equal or newer releases, development builds and recovery files on every card.
+If a card has a storage error, cleanup continues on the other cards. The
+updater shows the first affected path and lets you press **A** to start the
+installed update.
 
 ## Live download speed and time remaining
 
@@ -77,7 +113,7 @@ ISO unread while checking the disc file and finding Swiss at the drive root.
 The complete updater executable, including its public HTTPS trust anchors, is
 copied into MEM1 before launch; its console uses the IPL font and needs no disc
 assets after the initial `version.md` read. It explicitly unmounts `dvd:/` before
-mounting the writable GC Loader card or changing an installation,
+mounting SD cards or changing an installation,
 and refuses to continue if the disc remains mounted. This preserves the source-
 disc release fix from [PR #2](https://github.com/capz/AnimalTown.Updater/pull/2).
 Image replacement then needs no further executable or asset reads from that
@@ -88,7 +124,7 @@ writes exactly that ASCII value to `version.md`: no BOM, newline or Markdown
 formatting. Disc validation checks it against the build identity and boot title.
 Renaming an ISO does not affect the mounted file. A missing, invalid, oversized
 or mismatched version file fails before writable storage or network setup.
-The updater does not fall back to an ISO scan or `image-path.txt`.
+The updater uses the launched disc for the installed version check.
 
 The updater reads GitHub's `/repos/capz/AnimalTown/releases/latest` API once,
 with a 32 KiB HTTP response cap before decoding and at most 64 asset records.
@@ -109,13 +145,14 @@ new release discovery.
 The ISO streams into checked contiguous storage with a fixed 32 KiB coalescing workspace and 16 KiB reads/writes. The SDK build reserves a 1 MiB managed heap for CA/HTTP/JSON working data. Its length, GitHub SHA-256 digest, AnimalTown game ID and embedded version
 must match before activation. The new ISO keeps GitHub's filename in `/games`;
 it is never renamed to an old filename. Contiguous-file
-publication and card readback complete before GC Loader's hardware image mapping
-is changed. The SDK then reads the physical DVD interface and compares the whole
-boot header with the verified file. A pre-existing destination is never
+publication and card readback complete before activation. On a GC Loader
+destination, the SDK changes the drive mapping and compares the physical disc's
+boot header with the verified file. Swiss handles SD2SP2 and SD Gecko booting.
+A pre-existing destination is never
 truncated: only an exact size/digest/version match can be reused. Otherwise
 the update stops and preserves it. A failed download, verification, selection,
-helper preparation or cancellation preserves every prior image. A failed
-selection can leave the drive mapping changed; files remain available for
+helper preparation or cancellation before installation preserves every prior
+image. A failed GC Loader selection can leave the drive mapping changed. Files remain available for
 manual recovery.
 
 Writable SD operations run inside the SDK's automatic-defragmentation scope,
@@ -128,8 +165,9 @@ be met; automatic defragmentation is not a fragmented-download fallback.
 
 ## SD card setup
 
-Use direct GC Loader firmware boot with writable SD-sector support, a FAT32 or
-exFAT card, and a working Broadband Adapter with Internet/DNS access. The game
+Use a writable FAT32 or exFAT SD card and a working Broadband Adapter with
+Internet/DNS access. A GC Loader destination requires firmware with writable
+SD-sector support. The game
 image must contain `version.md` matching its embedded release version; its
 basename can be changed. For example:
 
@@ -143,12 +181,13 @@ fallback for discs assembled without it. No HTTPS configuration folder, seed
 file or PC provisioning is required. The public CA bundle is embedded in the
 updater itself, so unmounting or replacing the source ISO cannot remove it.
 
-Place a supported official normal Swiss DOL at the drive root. Its filename can
+Place a supported official normal Swiss DOL at the root of an available SD card.
+The updater checks the selected card first. Its filename can
 stay `boot.dol`, `swiss_r2119.dol`, `SWISS.DOL` or another `.dol` name. The updater
-checks file contents, chooses the newest recognized revision and uses a
-deterministic path ordering for duplicates. It does not search subdirectories
-for Swiss. The old `animaltown-updater/swiss.dol` location remains a
-content-validated fallback when no supported root DOL is found.
+checks file contents, chooses the newest recognized revision on each card and
+uses a deterministic path ordering for duplicates. The old
+`animaltown-updater/swiss.dol` location remains a content-validated fallback
+when a card has no supported root DOL.
 
 DOL headers describe executable layout and do not contain a Swiss identity.
 Official Swiss payloads are compressed, so the updater validates layout/launch
@@ -236,10 +275,12 @@ dotnet run --project tests/Updater.Tests.csproj -c Release
 
 The automated checks cover SHA-256 padding/multiblock vectors, direct NKit release
 selection, exact bounded version-file reads, numeric version comparisons,
-fixed `/games` paths, asset identity, scoped automatic defragmentation and policy
-restoration, plus launch-path validation and protocol handoff. Historical scan
-and replacement helpers retain their regression fixtures, but build guards
-require them to be absent from the production updater's AOT reachability.
+selected-volume `/games` paths, asset identity, scoped automatic defragmentation and policy
+restoration, plus launch-path validation and protocol handoff. Cleanup checks
+verify removal of older renamed copies across writable cards, preservation of
+the downloaded ISO and recovery data, and continuation when a card is
+unavailable. Build guards keep historical image selection and replacement
+helpers out of the production updater's AOT reachability.
 Trust checks verify all 118 roots and their fingerprints, reject stale
 generated data, and exercise the exact generated bytes through native AOT with
 the real 1 MiB managed heap and GC stress. The SDK checks local-clock certificate
@@ -255,14 +296,16 @@ the SDK's native AOT runtime with the actual 1 MiB managed heap. Wide directorie
 thousands of stable/development images and 30 nested directories must complete
 with bounded retained memory and closed file handles, opening zero installed
 ISO/GCM files. It checks that the version file is read before the writable mount
-and that the disc has been released before Swiss root enumeration. The pinned SDK tests its
+and that the disc has been released before Swiss root enumeration. It also
+checks one-card and multiple-card startup, destination selection and release of
+mounted volumes when the update stops. The pinned SDK tests its
 real FAT32/exFAT driver separately: the original driver's 10-level exFAT path
 limit reported `OutOfMemoryException` without exhausting memory. Its replacement
 supports 64 levels and reports a path-depth error beyond that limit. Failures
 show the current operation/path, and native exceptions retain their
 diagnostic text even when managed memory is exhausted.
 
-Publication and verified physical disc selection preserve every prior image.
+Publication and boot preparation finish before optional cleanup begins.
 After a power cut, launch an existing complete game and retry; its version file
 determines whether a newer release is required. Partial downloads are never
 booted. Existing valid new-image collisions are verified
