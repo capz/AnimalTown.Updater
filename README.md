@@ -27,6 +27,12 @@ use **D-pad Up/Down** to highlight a card and press **A** to confirm or **B** to
 cancel. The update keeps the published filename in the selected card's `/games`
 directory. The card needs enough contiguous free space for the release.
 
+PicoBoot and PicoLoader setups use the same SD2SP2 and SD Gecko destinations.
+The updater lists the card by its adapter, and accepts a supported Swiss DOL
+named `ipl.dol` at the root. The same picker works for other Swiss setups using
+these adapters. [PicoBoot installation guide](https://support.webhdx.dev/gc/picoboot/installation-guide)
+[PicoLoader storage guide](https://github.com/makeo/PicoLoader#readme)
+
 ## Automatic cleanup of older copies
 
 Press **X** on the updater screen to turn **Delete older copies on all writable

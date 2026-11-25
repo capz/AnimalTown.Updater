@@ -30,6 +30,9 @@ internal static class Program
         if(!Storage.Mount(StorageDevice.DvdDrive))return 16;
         bool multi=System.IO.File.Exists("dvd:/multi-destination");
         bool sdOnly=System.IO.File.Exists("dvd:/sd-only");
+        bool adaptersOnly=System.IO.File.Exists("dvd:/adapters-only");
+        string[] expectedRoots=multi?new[]{"gcloader:/","sd:/","cardb:/"}:
+            adaptersOnly?new[]{"sd:/","cardb:/"}:new string[0];
         var destinationChoice=new TaskCompletionSource<int>();
         var scan=UpdateWorker.Run(CancellationToken.None,destinationChoice.Task,Task.FromResult(false));
 #else
@@ -42,8 +45,9 @@ internal static class Program
 #if SCAN_UPDATER
             var destinations=Updater.Destinations;
             if(destinations.Length>0&&!destinationChoice.Task.IsCompleted){
-                if(!multi||destinations.Length!=3||destinations[0].Root!="gcloader:/"||destinations[1].Root!="sd:/"||destinations[2].Root!="cardb:/")
-                    throw new Exception("Writable destination list is incorrect");
+                if(destinations.Length!=expectedRoots.Length)throw new Exception("Writable destination count is incorrect");
+                for(int i=0;i<destinations.Length;i++)
+                    if(destinations[i].Root!=expectedRoots[i])throw new Exception("Writable destination is incorrect");
 #if SCAN_UI
                 console.DrawDestinations(destinations,1);
 #endif
@@ -73,10 +77,11 @@ internal static class Program
         VerifyAllocationRestored();
         if(Storage.IsMounted(StorageDevice.GcLoader)||Storage.IsMounted(StorageDevice.SdSerialPort2)||Storage.IsMounted(StorageDevice.SdSlotA)||Storage.IsMounted(StorageDevice.SdSlotB))
             throw new Exception("An SD volume remained mounted after the update stopped");
-        if(Updater.DestinationLabel!=(multi||sdOnly?"SD2SP2":"GC Loader SD")||destinationChoice.Task.IsCompleted!=multi)
+        string expectedLabel=adaptersOnly?"SD Gecko (Slot B)":multi||sdOnly?"SD2SP2":"GC Loader SD";
+        if(Updater.DestinationLabel!=expectedLabel||destinationChoice.Task.IsCompleted!=(expectedRoots.Length>0))
             throw new Exception("Updater did not use the expected destination");
-        var helperDevice=sdOnly?StorageDevice.SdSerialPort2:StorageDevice.GcLoader;
-        string helperRoot=sdOnly?"sd:/":"gcloader:/";
+        var helperDevice=sdOnly||adaptersOnly?StorageDevice.SdSerialPort2:StorageDevice.GcLoader;
+        string helperRoot=sdOnly||adaptersOnly?"sd:/":"gcloader:/";
         if(!Storage.Mount(helperDevice))return 17;
         // Test-only catalog and payload exercise a DOL larger than the entire
         // managed heap. Production root discovery cannot recognize this file.
@@ -96,7 +101,7 @@ internal static class Program
         if(helper.Path!=helperRoot+"swiss-streaming-fixture/renamed.DOL"||helper.Revision!=123)return 13;
         Storage.Unmount(helperDevice);
         Console.WriteLine("Native Swiss discovery streamed a 2 MiB executable with the 1 MiB heap");
-        if(multi||sdOnly)Console.WriteLine("Native updater used SD2SP2 with the expected destination prompt behavior");
+        if(multi||sdOnly||adaptersOnly)Console.WriteLine("Native updater selected "+expectedLabel+" with the expected destination prompt behavior");
 #else
         var image=scan.GetAwaiter().GetResult();
         if(image.Version!="12.34.56"||image.Path!="gcloader:/boot.GCM")return 11;

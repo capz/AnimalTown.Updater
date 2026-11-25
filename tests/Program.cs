@@ -442,8 +442,8 @@ try{
     bool missing=false;try{await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog);}catch(IOException error){missing=error.Message.Contains("drive root");}
     Check(missing&&File.Exists(nested),"Swiss discovery ignores nested executables and explains root placement without modifying them");
     string fallback=SwissFile("animaltown-updater/swiss.dol",newSwiss);
-    string rootOld=SwissFile("boot.dol",oldSwiss);
-    Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==rootOld,"a supported root Swiss takes priority over a newer legacy private helper");
+    string rootOld=SwissFile("ipl.dol",oldSwiss);
+    Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==rootOld,"a supported PicoBoot ipl.dol at the root takes priority over a newer legacy private helper");
     File.Delete(rootOld);
     Check((await SwissDiscovery.FindAsync(swissVolume,default,null,swissCatalog)).Path==fallback,"an existing private helper remains a content-validated fallback when root has none");
     File.WriteAllBytes(fallback,SwissDol(4));

@@ -103,7 +103,7 @@ def main():
     if args.ui:sources.append(ROOT/'tests/native-scan-ui.c')
     run(*flags,generated,ROOT/'tests/native-scan-host.c',instrumented,*sources,dead_strip,'-lm','-o',binary)
     scenarios=['small','wide','candidates','deep'] if args.scenario=='all' else [args.scenario]
-    if args.updater:scenarios += ['multi-destination','sd-only']
+    if args.updater:scenarios += ['multi-destination','sd-only','adapters-only']
     if fault_enabled:scenarios += ['native-memory-fault']
     results=[]
     for scenario in scenarios:
@@ -111,8 +111,10 @@ def main():
             volume_root=Path(fixture_root)
             volume=fixture(volume_root,scenario,args.width if scenario!='deep' else min(args.width,100),args.highest_created_first)
             if args.updater:
-                if scenario=='sd-only':
+                if scenario in ('sd-only','adapters-only'):
                     volume=volume.rename(volume_root/'sd')
+                if scenario=='adapters-only':
+                    image(volume_root/'cardb'/'games'/'old.GCM','0.20.0')
                 if scenario=='multi-destination':
                     (volume_root/'sd').mkdir()
                     (volume_root/'carda').mkdir()
@@ -120,7 +122,7 @@ def main():
                     (volume_root/'cardb'/'games').mkdir(parents=True)
                 swiss_fixture(volume)
                 disc=volume_root/'dvd';disc.mkdir();(disc/'version.md').write_bytes(b'0.22.0')
-                if scenario in ('multi-destination','sd-only'):(disc/scenario).touch()
+                if scenario in ('multi-destination','sd-only','adapters-only'):(disc/scenario).touch()
             snapshot_root=volume_root if args.updater else volume
             before=snapshot(snapshot_root)
             env=dict(os.environ,DND_STORAGE_ROOT=str(volume_root),DND_ASYNC_MANUAL='1',DND_SCAN_HEAP_BYTES='1048576')
