@@ -25,6 +25,8 @@ internal sealed class StableImage
 
 internal static class StableImageDiscovery
 {
+    private delegate void VisitImage(string path,string version);
+
     internal static bool TryFileVersion(string path,out string version)
     {
         version="";if(path==null)return false;string name=System.IO.Path.GetFileName(path);
@@ -45,7 +47,7 @@ internal static class StableImageDiscovery
     {
         const string component=".animaltown-update";
         int start=0;
-        for(int i=0;i<=path.Length;i++)if(i==path.Length||path[i]=='/'){
+        for(int i=0;i<=path.Length;i++)if(i==path.Length||path[i]=='/'||path[i]=='\\'){
             int length=i-start;
             if(length==component.Length&&SamePrefix(path.Substring(start,length),component)||
                 length>=6&&SamePrefix(path.Substring(start,length),".__dnd"))return true;
@@ -67,7 +69,22 @@ internal static class StableImageDiscovery
     }
     internal static async Task<StableImage> ScanAsync(string root,CancellationToken token,Action<string>? reportPath=null)
     {
-        StableImage? best=null;int work=0,depth=0;
+        StableImage? best=null;
+        await VisitStableImagesAsync(root,"",token,reportPath,(path,version)=>{
+            if(best==null||CompareVersions(version,best.Version)>0||CompareVersions(version,best.Version)==0&&ComparePaths(path,best.Path)<0)
+                best=new StableImage(path,version);
+        });
+        token.ThrowIfCancellationRequested();return best??throw new IOException("No stable AnimalTown ISO was found on the GC Loader volume");
+    }
+    internal static Task RemoveOlderCopiesAsync(string root,string published,string releaseVersion,Action<string>? reportPath=null)
+    {
+        return VisitStableImagesAsync(root,published,CancellationToken.None,reportPath,(path,version)=>{
+            if(CompareVersions(version,releaseVersion)<0)File.Delete(path);
+        });
+    }
+    private static async Task VisitStableImagesAsync(string root,string excludedImage,CancellationToken token,Action<string>? reportPath,VisitImage visit)
+    {
+        int work=0,depth=0;
         var header=new byte[ImageFiles.HeaderSize];
         // A top-directory cursor does not collect sibling paths. Bound active
         // native directory handles and keep one of the SDK's 32 slots available
@@ -89,20 +106,19 @@ internal static class StableImageDiscovery
                 if(++work>=32){work=0;await Task.Yield();}
                 if(IsStagingPath(path))continue;
                 if(System.IO.Directory.Exists(path)){
-                    if(depth+1==cursors.Length)throw new IOException("GC Loader directory nesting exceeds the bounded scan depth; no image changed");
+                    if(depth+1==cursors.Length)throw new IOException("GC Loader directory nesting exceeds the bounded scan depth");
                     directories[++depth]=path;
                     cursors[depth]=System.IO.Directory.EnumerateFileSystemEntries(path).GetEnumerator();continue;
                 }
                 if(!SameSuffix(path,".iso")&&!SameSuffix(path,".gcm"))continue;
+                if(ComparePaths(path,excludedImage)==0)continue;
                 // Real read failures abort; bad/foreign headers are rejected.
                 if(!ImageFiles.TryReadVersion(path,header,out string version))continue;
                 try{ReleaseInfo.ParseStableVersion(version);}catch(FormatException){continue;}
-                if(best==null||CompareVersions(version,best.Version)>0||CompareVersions(version,best.Version)==0&&ComparePaths(path,best.Path)<0)
-                    best=new StableImage(path,version);
+                visit(path,version);
             }
         }finally{
             for(int i=0;i<cursors.Length;i++)cursors[i]?.Dispose();
         }
-        token.ThrowIfCancellationRequested();return best??throw new IOException("No stable AnimalTown ISO was found on the GC Loader volume");
     }
 }

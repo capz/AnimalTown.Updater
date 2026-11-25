@@ -364,6 +364,23 @@ try{
         Check(stoppedAt==Path.Combine(volume,"AnimalTown-20.0.0.iso"),"failed image-header read retains the actual candidate path");
     }
     Check(File.Exists(selected.Path),"discovery I/O failure preserves the previous selected installation");
+
+    Image("B/renamed older copy.GCM","1.9.0");
+    Image("renamed-old-preview.iso","1.9.0+abcdef123456");
+    Image(".animaltown-update/old.iso","1.9.0");
+    Image("nested/.__dndcw_hidden/old.iso","1.9.0");
+    Image("old.iso.bak","1.9.0");
+    Image("old.iso.update","1.9.0");
+    string[] olderCopies=new[]{"AnimalTown-0.99.99.iso","A/AnimalTown-1.0.0.nkit.iso","B/AnimalTown-1.9.99.iso",
+        "B/AnimalTown-1.10.9.nkit.iso","B/renamed older copy.GCM","AnimalTown-997.0.0.iso"};
+    var olderPaths=olderCopies.Select(name=>Path.Combine(volume,name.Replace('/',Path.DirectorySeparatorChar))).ToArray();
+    var preserved=Directory.EnumerateFiles(volume,"*",SearchOption.AllDirectories).Except(olderPaths)
+        .ToDictionary(path=>path,File.ReadAllBytes);
+    await StableImageDiscovery.RemoveOlderCopiesAsync(volume,selected.Path,selected.Version);
+    await StableImageDiscovery.RemoveOlderCopiesAsync(volume,selected.Path,selected.Version);
+    Check(olderPaths.All(path=>!File.Exists(path)),"cleanup removes every older stable ISO or GCM based on its header, including renamed copies");
+    Check(preserved.All(file=>File.Exists(file.Key)&&File.ReadAllBytes(file.Key).SequenceEqual(file.Value)),
+        "cleanup preserves the selected image, equal and newer releases, previews, unrelated files and recovery data");
 }finally{Directory.Delete(volume,true);}
 string empty=Path.Combine(Path.GetTempPath(),"animaltown-empty-"+Guid.NewGuid());Directory.CreateDirectory(empty);
 try{bool refused=false;try{await StableImageDiscovery.ScanAsync(empty,default);}catch(IOException){refused=true;}Check(refused,"missing stable images fail without guessing a target directory");}

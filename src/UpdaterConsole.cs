@@ -25,7 +25,7 @@ internal sealed class UpdaterConsole : IDisposable
     private float Measure(string text)=>font.MeasureText(text,scale).X;
     private float MeasureDiagnostic(string text)=>font.MeasureText(text,diagnosticScale).X;
     internal void Draw(string status,bool busy,bool failed,int phase,long received,long total,string artifact,string detail="",string operation="",
-        string summary="",string updateVersion="")
+        string summary="",string updateVersion="",bool cleanupEnabled=false,bool cleanupWarning=false)
     {
         speed.Update(busy&&!failed&&phase==3,received,total,Clock.Timestamp);
         if(status!=cachedStatus||failed!=cachedFailed){cachedStatus=status;cachedFailed=failed;lineCount=ConsoleText.Wrap(status,Width-dotCell*3-10,measure,failed?failureLines:lines);}
@@ -50,7 +50,7 @@ internal sealed class UpdaterConsole : IDisposable
         // Leave room for the filename beneath the bar, even if the status wraps.
         if(BodyTop+bodyHeight+summaryHeight+4>FooterY)summaryHeight=0;
         float y=Math.Max(BodyTop,(480-bodyHeight-summaryHeight)/2);
-        Text(failed?"UPDATE STOPPED":Stage(phase),Left,y,11,muted);
+        Text(failed?(cleanupWarning?"CLEANUP STOPPED":"UPDATE STOPPED"):Stage(phase),Left,y,11,muted);
         if(failed)Right(Stage(phase),Left+Width,y,11,muted);
         else if(speed.Text.Length>0)Right(speed.Text,Left+Width,y,11,muted);
         y+=30;var statusLines=failed?failureLines:lines;
@@ -87,7 +87,11 @@ internal sealed class UpdaterConsole : IDisposable
             if(speed.Eta.Length>0)Right(speed.Eta,Left+Width,y+57,11,muted);
         }else Text("GITHUB RELEASES / NKIT IMAGE",Left,y+28,12,muted);
         ui.FillRectangle(new RectF(Left,FooterY,Width,1),rule);
-        Text(failed||!busy?"B  EXIT":"B  CANCEL",Left,409,12,muted);Right("GC LOADER / SD",Left+Width,409,12,muted);
+        if(failed||!busy)Text(cleanupWarning?"A  START GAME":"B  EXIT",Left,409,12,muted);
+        if(busy&&!failed&&phase<5){
+            Text("B  CANCEL",Left,409,12,muted);
+            Right(cleanupEnabled?"X  DELETE OLDER ANIMALTOWN COPIES  ON":"X  DELETE OLDER ANIMALTOWN COPIES  OFF",Left+Width,409,12,muted);
+        }else Right("GC LOADER / SD",Left+Width,409,12,muted);
         ui.End();device.EndFrame();
     }
     private void Text(string text,float x,float y,float height,Color32 color)=>ui.DrawText(font,text,new Vector2(x,y),color,height/font.CellHeight);

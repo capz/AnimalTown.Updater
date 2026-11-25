@@ -21,7 +21,7 @@ internal static class Program
             switch(scene){
                 case 0:console.Draw("Connecting Broadband Adapter",true,false,1,0,0,"");break;
                 case 1:console.Draw("Downloading sample image",true,false,3,44040192+within*50000/1000000,93001728,"Sample rate / 400 kb/s");break;
-                case 2:console.Draw("Downloading release image",true,false,3,22000000+within*200000/1000000,42799104,"AnimalTown-0.68.0.nkit.iso",summary:DaylightSummary,updateVersion:"0.68.0");break;
+                case 2:console.Draw("Downloading release image",true,false,3,22000000+within*200000/1000000,42799104,"AnimalTown-0.68.0.nkit.iso",summary:DaylightSummary,updateVersion:"0.68.0",cleanupEnabled:true);break;
                 case 3:console.Draw("No stable AnimalTown ISO was found.",false,true,0,0,0,"","IOException\ngcloader:/","Find highest stable installation");break;
                 case 4:console.Draw("The data card could not be mounted.",false,true,0,0,0,"","GC Loader mount returned false.\ngcloader:/","Mount writable data volume");break;
                 case 5:console.Draw("The installed AnimalTown image could not be read from the selected data volume.",false,true,0,0,0,"","IOException / native result: -1\ngcloader:/games/AnimalTown/Preview-builds/resident-onboarding/AnimalTown-0.11.15+abcdef123456/AnimalTown-0.11.15+abcdef123456.nkit.iso","Read installed image header and validate AnimalTown identity before installing an update");break;

@@ -16,13 +16,14 @@ namespace AnimalTown.Updater;
 
 internal static class Updater
 {
+    internal const int InstallationPhase=5;
     internal static string Operation="Read game launch request",CurrentPath="",NativeResult="";
     internal static string Status="Preparing updater";
     internal static int Phase;
     internal static long DownloadedBytes,TotalBytes;
     internal static string Artifact="",ReleaseVersion="",ReleaseSummary="";
-    internal static string LaunchImage="";
-    internal static async Task<PreparedDol?> Run(CancellationToken token)
+    internal static string LaunchImage="",CleanupWarning="";
+    internal static async Task<PreparedDol?> Run(CancellationToken token,Task<bool> cleanupChoice)
     {
         Operation="Read game launch request";Status="Reading game launch information";
         var request=LaunchRequest.Parse(NativeLaunchArguments.Read());
@@ -86,12 +87,21 @@ internal static class Updater
                 launch.Dispose();launch=null;Phase=2;Operation="Release check complete";CurrentPath=IsoVersion.DiscPath;return null;
             }
             Operation="Prepare new image autoload";launch.SetArguments(SwissLaunch.Arguments(swissPath,target));
-            Phase=5;Operation="Select and verify GC Loader image";CurrentPath=target;Status="Selecting and verifying the game disc";
-            await Task.Yield();
+            Operation="Select and verify GC Loader image";CurrentPath=target;Status="Selecting and verifying the game disc";Phase=InstallationPhase;
+            bool cleanupEnabled=await cleanupChoice;
             token.ThrowIfCancellationRequested();
-            // version.md identifies the running version, not its physical path.
-            // Preserve existing images rather than guessing which one to delete.
             Storage.SelectGcLoaderDiscImage(target);
+            if(cleanupEnabled){
+                Operation="Remove older AnimalTown copies";Status="Removing older AnimalTown copies";
+                try{
+                    await StableImageDiscovery.RemoveOlderCopiesAsync(request.Root,target,ReleaseVersion,static path=>CurrentPath=path);
+                }catch(Exception error){
+                    // Cleanup can fail after the new disc has been selected.
+                    // Keep the prepared Swiss handoff available from the warning screen.
+                    string message=string.IsNullOrEmpty(error.Message)?"Could not remove all older copies.":error.Message;
+                    CleanupWarning=message+"\n"+CurrentPath;
+                }
+            }
             LaunchImage=target;Phase=6;Operation="Launch selected image through Swiss";CurrentPath=target;Status="Starting AnimalTown";
             var prepared=launch;launch=null;return prepared;
         }catch{

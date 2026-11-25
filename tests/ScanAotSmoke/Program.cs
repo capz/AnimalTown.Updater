@@ -27,7 +27,7 @@ internal static class Program
         // The portable storage backend exposes a fixture directory for dvd:/;
         // physical FST mounting itself requires the console/emulator backend.
         if(!Storage.Mount(StorageDevice.DvdDrive))return 16;
-        var scan=UpdateWorker.Run(CancellationToken.None);
+        var scan=UpdateWorker.Run(CancellationToken.None,System.Threading.Tasks.Task.FromResult(false));
 #else
         if(!Storage.Mount(StorageDevice.GcLoader))return 10;
         var scan=StableImageDiscovery.ScanAsync("gcloader:/",CancellationToken.None);
