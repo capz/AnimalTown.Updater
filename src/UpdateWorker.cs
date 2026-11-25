@@ -6,9 +6,9 @@ namespace AnimalTown.Updater;
 
 internal static class UpdateWorker
 {
-    internal static Task<PreparedDol?> Run(CancellationToken token,Task<bool> cleanupChoice)
+    internal static Task<PreparedDol?> Run(CancellationToken token,Task<int> destinationChoice,Task<bool> cleanupChoice)
     {
-        var worker=new Work(token,cleanupChoice);
+        var worker=new Work(token,destinationChoice,cleanupChoice);
         // Use the pinned SDK's Action overload explicitly. An awaited dummy
         // task with ConfigureAwait(false) could already be complete, allowing
         // the updater to start inline on the application executor instead.
@@ -18,14 +18,16 @@ internal static class UpdateWorker
     private sealed class Work
     {
         private readonly CancellationToken token;
+        private readonly Task<int> destinationChoice;
         private readonly Task<bool> cleanupChoice;
         private Task<PreparedDol?>? update;
         internal readonly TaskCompletionSource<PreparedDol?> Completion=new TaskCompletionSource<PreparedDol?>();
-        internal Work(CancellationToken token,Task<bool> cleanupChoice){this.token=token;this.cleanupChoice=cleanupChoice;}
+        internal Work(CancellationToken token,Task<int> destinationChoice,Task<bool> cleanupChoice)
+        {this.token=token;this.destinationChoice=destinationChoice;this.cleanupChoice=cleanupChoice;}
         internal void Start()
         {
             try{
-                token.ThrowIfCancellationRequested();update=Updater.Run(token,cleanupChoice);
+                token.ThrowIfCancellationRequested();update=Updater.Run(token,destinationChoice,cleanupChoice);
                 if(update.IsCompleted)Finish();else update.GetAwaiter().OnCompleted(Finish);
             }catch(Exception error){Completion.SetException(error);}
         }

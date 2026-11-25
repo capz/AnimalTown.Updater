@@ -17,13 +17,15 @@ namespace AnimalTown.Updater;
 internal static class Updater
 {
     internal const int InstallationPhase=5;
-    internal static string Operation="Read game launch request",CurrentPath="",NativeResult="";
+    internal static string Operation="Read game launch request",CurrentPath="";
     internal static string Status="Preparing updater";
     internal static int Phase;
     internal static long DownloadedBytes,TotalBytes;
     internal static string Artifact="",ReleaseVersion="",ReleaseSummary="";
     internal static string LaunchImage="",CleanupWarning="";
-    internal static async Task<PreparedDol?> Run(CancellationToken token,Task<bool> cleanupChoice)
+    internal static UpdateVolume[] Destinations=new UpdateVolume[0];
+    internal static string DestinationLabel="";
+    internal static async Task<PreparedDol?> Run(CancellationToken token,Task<int> destinationChoice,Task<bool> cleanupChoice)
     {
         Operation="Read game launch request";Status="Reading game launch information";
         var request=LaunchRequest.Parse(NativeLaunchArguments.Read());
@@ -41,16 +43,25 @@ internal static class Updater
         // One process-wide scope covers updater-owned writable SD I/O. Reads
         // remain read-only; downloads still require the strict contiguous writer.
         using var allocationPolicy=Defrag.BeginScope(true,65536);
-        Operation="Mount writable GC Loader volume";CurrentPath="gcloader:/";Status="Mounting GC Loader SD card";
-        await Task.Yield();token.ThrowIfCancellationRequested();
-        if(!Storage.IsMounted(StorageDevice.GcLoader)&&!Storage.Mount(StorageDevice.GcLoader)){NativeResult="GC Loader mount returned false";throw new IOException("GC Loader SD is unavailable or not writable");}
-        // Validate and stage the helper before configuring HTTPS or downloading.
-        // Its native image stays resident through the handoff.
-        Operation="Prepare Swiss launch helper";CurrentPath="gcloader:/";Status="Finding Swiss on the GC Loader drive root";
-        var swiss=await SwissDiscovery.FindAsync("gcloader:/",token,static path=>CurrentPath=path);
-        string swissPath=swiss.Path;CurrentPath=swissPath;Status="Preparing Swiss r"+swiss.Revision;
         PreparedDol? launch=null;
         try{
+            using var volumes=new UpdateVolumes();
+            Operation="Find writable SD cards";Status="Checking update destinations";
+            var destinations=await volumes.FindWritableAsync(token,static path=>CurrentPath=path);
+            token.ThrowIfCancellationRequested();
+            if(destinations.Length==0){CurrentPath="";throw new IOException("No writable SD card available for the update.");}
+            int selected=0;
+            if(destinations.Length>1){
+                Operation="Choose update destination";CurrentPath="";
+                Destinations=destinations;
+                selected=await destinationChoice;
+                token.ThrowIfCancellationRequested();
+            }
+            var destination=destinations[selected];DestinationLabel=destination.Label;
+            // Stage Swiss before configuring HTTPS or changing any game images.
+            Operation="Prepare Swiss launch helper";CurrentPath=destination.Root;Status="Finding Swiss on mounted SD cards";
+            var swiss=await volumes.FindSwissAsync(destination,token,static path=>CurrentPath=path);
+            string swissPath=swiss.Path;CurrentPath=swissPath;Status="Preparing Swiss r"+swiss.Revision;
             launch=await DolLauncher.PrepareAsync(swissPath,token);
             Phase=1;Operation="Start Broadband Adapter";CurrentPath="";Status="Starting Broadband Adapter";
             await NetworkRuntime.StartAsync(new NetworkOptions(),token);await ConfigureTls(token);
@@ -63,8 +74,9 @@ internal static class Updater
                 var release=await ReadStableRelease(http,token);
                 if(ReleaseInfo.NeedsStableUpdate(installedVersion,release.Version)){
                     ReleaseVersion=release.Version;ReleaseSummary=release.Summary;
-                    Artifact=release.Name;TotalBytes=release.Size;target=request.DownloadPath(release.Name);
-                    Directory.CreateDirectory(LaunchRequest.GamesDirectory);
+                    Artifact=release.Name;TotalBytes=release.Size;target=LaunchRequest.DownloadPath(destination.GamesDirectory,release.Name);
+                    CurrentPath=destination.GamesDirectory;
+                    Directory.CreateDirectory(destination.GamesDirectory);
                     CurrentPath=target;
                     // Existing files are never truncated or silently replaced.
                     // A complete previous download can be reused only after
@@ -87,23 +99,25 @@ internal static class Updater
                 launch.Dispose();launch=null;Phase=2;Operation="Release check complete";CurrentPath=IsoVersion.DiscPath;return null;
             }
             Operation="Prepare new image autoload";launch.SetArguments(SwissLaunch.Arguments(swissPath,target));
-            Operation="Select and verify GC Loader image";CurrentPath=target;Status="Selecting and verifying the game disc";Phase=InstallationPhase;
+            bool gcLoader=destination.Device==StorageDevice.GcLoader;
+            Operation=gcLoader?"Select and verify GC Loader image":"Prepare Swiss image launch";
+            CurrentPath=target;Status=gcLoader?"Selecting and verifying the game disc":"Preparing to boot through Swiss";Phase=InstallationPhase;
             bool cleanupEnabled=await cleanupChoice;
             token.ThrowIfCancellationRequested();
-            Storage.SelectGcLoaderDiscImage(target);
+            if(gcLoader)Storage.SelectGcLoaderDiscImage(target);
             if(cleanupEnabled){
                 Operation="Remove older AnimalTown copies";Status="Removing older AnimalTown copies";
                 try{
-                    await StableImageDiscovery.RemoveOlderCopiesAsync(request.Root,target,ReleaseVersion,static path=>CurrentPath=path);
+                    await StableImageDiscovery.RemoveOlderCopiesAsync(destination.Root,target,ReleaseVersion,static path=>CurrentPath=path);
                 }catch(Exception error){
-                    // Cleanup can fail after the new disc has been selected.
+                    // Cleanup can fail after the verified image has been prepared for boot.
                     // Keep the prepared Swiss handoff available from the warning screen.
                     string message=string.IsNullOrEmpty(error.Message)?"Could not remove all older copies.":error.Message;
                     CleanupWarning=message+"\n"+CurrentPath;
                 }
             }
             LaunchImage=target;Phase=6;Operation="Launch selected image through Swiss";CurrentPath=target;Status="Starting AnimalTown";
-            var prepared=launch;launch=null;return prepared;
+            return launch;
         }catch{
             launch?.Dispose();
             try{TlsConfiguration.Reset();NetworkRuntime.Stop();}catch{ }

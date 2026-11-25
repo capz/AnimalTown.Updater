@@ -103,6 +103,7 @@ def main():
     if args.ui:sources.append(ROOT/'tests/native-scan-ui.c')
     run(*flags,generated,ROOT/'tests/native-scan-host.c',instrumented,*sources,dead_strip,'-lm','-o',binary)
     scenarios=['small','wide','candidates','deep'] if args.scenario=='all' else [args.scenario]
+    if args.updater:scenarios += ['multi-destination','sd-only']
     if fault_enabled:scenarios += ['native-memory-fault']
     results=[]
     for scenario in scenarios:
@@ -110,9 +111,18 @@ def main():
             volume_root=Path(fixture_root)
             volume=fixture(volume_root,scenario,args.width if scenario!='deep' else min(args.width,100),args.highest_created_first)
             if args.updater:
+                if scenario=='sd-only':
+                    volume=volume.rename(volume_root/'sd')
+                if scenario=='multi-destination':
+                    (volume_root/'sd').mkdir()
+                    (volume_root/'carda').mkdir()
+                    (volume_root/'carda'/'games').write_bytes(b'blocked destination')
+                    (volume_root/'cardb'/'games').mkdir(parents=True)
                 swiss_fixture(volume)
                 disc=volume_root/'dvd';disc.mkdir();(disc/'version.md').write_bytes(b'0.22.0')
-            before=snapshot(volume)
+                if scenario in ('multi-destination','sd-only'):(disc/scenario).touch()
+            snapshot_root=volume_root if args.updater else volume
+            before=snapshot(snapshot_root)
             env=dict(os.environ,DND_STORAGE_ROOT=str(volume_root),DND_ASYNC_MANUAL='1',DND_SCAN_HEAP_BYTES='1048576')
             # Production Swiss discovery makes a second top-directory pass;
             # the injected-catalog streaming fixture makes one additional pass.
@@ -126,7 +136,7 @@ def main():
             if scenario=='native-memory-fault':env['DND_SCAN_NATIVE_MEMORY_FAULT']='1'
             else:env.pop('DND_SCAN_NATIVE_MEMORY_FAULT',None)
             result=subprocess.run([str(binary)],env=env,text=True,capture_output=True,timeout=120)
-            unchanged=before==snapshot(volume)
+            unchanged=before==snapshot(snapshot_root)
             print(scenario+':\n'+result.stdout+result.stderr,flush=True)
             results.append({'scenario':scenario,'returncode':result.returncode,'unchanged':unchanged,'stdout':result.stdout,'stderr':result.stderr})
     (work/'results.json').write_text(json.dumps(results,indent=2)+'\n')

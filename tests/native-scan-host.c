@@ -29,7 +29,7 @@ struct dirent *__wrap_readdir(DIR *directory)
 DndString *dnd_scan_dir_next(DndManagedHeap *heap,int handle,int kind)
 {
     if(getenv("DND_SCAN_VERSION_FILE_MODE")){
-        assert(!dnd_storage_is_mounted(3)&&dnd_storage_is_mounted(6));
+        assert(!dnd_storage_is_mounted(3)&&(dnd_storage_is_mounted(6)||dnd_storage_is_mounted(2)));
         if(entries==0)assert(dnd_storage_auto_defrag_enabled()&&dnd_storage_auto_defrag_min_size()==65536);
     }
     in_scan_read=true;DndString *path=dnd_fs_dir_next(heap,handle,kind);in_scan_read=false;
@@ -42,9 +42,11 @@ int dnd_scan_open(DndString *path,int mode,int access,int share)
     bool version=path&&path->length>=sizeof(version_suffix)-1;
     for(size_t i=0;version&&i<sizeof(version_suffix)-1;i++)
         if(path->chars[path->length-(sizeof(version_suffix)-1)+i]!=(unsigned char)version_suffix[i])version=false;
-    if(version&&getenv("DND_SCAN_VERSION_FILE_MODE"))assert(dnd_storage_is_mounted(3)&&!dnd_storage_is_mounted(6));
+    if(version&&getenv("DND_SCAN_VERSION_FILE_MODE"))
+        assert(dnd_storage_is_mounted(3)&&!dnd_storage_is_mounted(6)&&!dnd_storage_is_mounted(0)&&!dnd_storage_is_mounted(1)&&!dnd_storage_is_mounted(2));
     static const char suffix[]="/boot.GCM";
-    int handle=dnd_fs_open(path,mode,access,share);opens++;
+    int handle=dnd_fs_open(path,mode,access,share);
+    if(access!=2)opens++;
     if(path&&path->length>=4){
         uint16_t *end=path->chars+path->length-4;
         if(end[0]=='.'&&(((end[1]|32)=='i'&&(end[2]|32)=='s'&&(end[3]|32)=='o')||((end[1]|32)=='g'&&(end[2]|32)=='c'&&(end[3]|32)=='m')))iso_opens++;
